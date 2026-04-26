@@ -148,6 +148,34 @@ ctxd chdir /path/to/repo
 
 親シェルの cwd は変更されません。返却された `cwd` を次のコマンドへ渡し直す前提です。
 
+### `ctxd git-switch`
+
+git ブランチを切り替え、切り替え後の working tree の状態を JSON で返します。
+
+```sh
+ctxd git-switch main
+```
+
+```json
+{
+  "ok": true,
+  "cmd": "git-switch",
+  "args": ["main"],
+  "result": {
+    "branch": "main",
+    "dirty": false,
+    "ahead": 0,
+    "behind": 0
+  },
+  "elapsed_ms": 32
+}
+```
+
+`branch` は detached HEAD のとき `null` になります。upstream が未設定の場合 `ahead` / `behind` は `0` です。
+失敗時は `error.code` が `not_a_git_repo` / `branch_not_found` / `dirty_tree` / `git_not_found` のいずれかになります。
+
+親シェルの HEAD は実際に切り替わります（switch は本物）が、cwd は変更されません。
+
 ---
 
 ## インストール

@@ -23,6 +23,7 @@ import (
 	"github.com/hummer98/ctxd/internal/output"
 	"github.com/hummer98/ctxd/internal/runner"
 	"github.com/hummer98/ctxd/internal/runner/chdir"
+	gitswitch "github.com/hummer98/ctxd/internal/runner/git_switch"
 )
 
 // version は build 時に -ldflags で上書きする想定。MVP の既定値はプレースホルダ。
@@ -100,6 +101,23 @@ func newRootCmd(registry *runner.Registry, stdout *os.File, exitCode *int) *cobr
 		},
 	}
 	rootCmd.AddCommand(chdirCmd)
+
+	// git-switch サブコマンド登録。
+	// TODO: 3 つ目のサブコマンド追加時に registerCommands ヘルパへ抽出する。
+	registry.Register(gitswitch.New())
+	gitSwitchCmd := &cobra.Command{
+		Use:   "git-switch <branch>",
+		Short: "Switch git branch and report branch / dirty / ahead / behind as JSON.",
+		Long: "Run `git switch <branch>` and report the resulting working tree state " +
+			"(branch, dirty, ahead, behind) as structured JSON.",
+		Args: cobra.ExactArgs(1),
+		RunE: func(cmd *cobra.Command, args []string) error {
+			flags := runner.Flags{Human: human, Expect: expects}
+			*exitCode = dispatchAndWrite(cmd.Context(), registry, stdout, "git-switch", args, flags)
+			return nil
+		},
+	}
+	rootCmd.AddCommand(gitSwitchCmd)
 
 	return rootCmd
 }

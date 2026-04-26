@@ -17,6 +17,14 @@ const (
 	// ErrPostconditionFailed は --expect の検証が失敗した場合に返す。
 	// 「リトライではなく診断」の意図で retryable=false。
 	ErrPostconditionFailed ErrorCode = "postcondition_failed"
+	// ErrNotAGitRepo は cwd が git working tree でない場合に返す。リトライ不可。
+	ErrNotAGitRepo ErrorCode = "not_a_git_repo"
+	// ErrBranchNotFound は git switch <branch> で対象ブランチが見つからない場合に返す。リトライ不可。
+	ErrBranchNotFound ErrorCode = "branch_not_found"
+	// ErrDirtyTree は未コミット変更により switch が拒否された場合に返す。リトライ不可。
+	ErrDirtyTree ErrorCode = "dirty_tree"
+	// ErrGitNotFound は git CLI が PATH に無い場合に返す。リトライ不可。
+	ErrGitNotFound ErrorCode = "git_not_found"
 )
 
 // Retryable は ErrorCode の既定 retryable 判定を返す。

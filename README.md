@@ -148,6 +148,34 @@ Errors return `ok: false` with `error.code` of `not_found` (path missing) or `no
 
 The parent shell's cwd is not modified — pass the resolved `cwd` to the next command instead.
 
+### `ctxd git-switch`
+
+Switch a git branch and report the resulting working tree state:
+
+```sh
+ctxd git-switch main
+```
+
+```json
+{
+  "ok": true,
+  "cmd": "git-switch",
+  "args": ["main"],
+  "result": {
+    "branch": "main",
+    "dirty": false,
+    "ahead": 0,
+    "behind": 0
+  },
+  "elapsed_ms": 32
+}
+```
+
+`branch` is `null` when HEAD is detached. `ahead` / `behind` are `0` when no upstream is configured.
+On failure, `error.code` is one of `not_a_git_repo`, `branch_not_found`, `dirty_tree`, or `git_not_found`.
+
+The parent shell's HEAD is updated (the switch is real) but cwd is not changed.
+
 ---
 
 ## Installation
