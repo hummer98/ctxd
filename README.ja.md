@@ -121,6 +121,33 @@ ctxd git-switch main --expect branch=main --expect dirty=false
 
 `--human` フラグでデバッグ用の人間可読出力に切り替えられます。
 
+### `ctxd chdir`
+
+パスを絶対化し、ディレクトリ内容と git ブランチ (あれば) を JSON で返します。
+
+```sh
+ctxd chdir /path/to/repo
+```
+
+```json
+{
+  "ok": true,
+  "cmd": "chdir",
+  "args": ["/path/to/repo"],
+  "result": {
+    "cwd": "/path/to/repo",
+    "git_branch": "main",
+    "listing": ["docs", "go.mod", "src"]
+  },
+  "elapsed_ms": 3
+}
+```
+
+`git_branch` はパスが git working tree の外にある場合や detached HEAD の場合は `null` を返します。
+エラー時は `ok: false` となり、`error.code` は `not_found`（パスが存在しない）または `not_a_directory`（ファイルを指定した）になります。
+
+親シェルの cwd は変更されません。返却された `cwd` を次のコマンドへ渡し直す前提です。
+
 ---
 
 ## インストール

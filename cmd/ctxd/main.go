@@ -22,6 +22,7 @@ import (
 
 	"github.com/hummer98/ctxd/internal/output"
 	"github.com/hummer98/ctxd/internal/runner"
+	"github.com/hummer98/ctxd/internal/runner/chdir"
 )
 
 // version は build 時に -ldflags で上書きする想定。MVP の既定値はプレースホルダ。
@@ -33,9 +34,14 @@ func main() {
 
 // run は main の本体を分離したもの。テストから差し替え可能。
 // 戻り値は os.Exit に渡す exit code。
+//
+// サブコマンドの exit code は subcmdExit に集約する (D7)。
+// RunE 内で os.Exit を直呼びしないことで run() の戻り値で観察可能にし、
+// dispatchAndWrite の signature 変更を避けつつ exit code 規約を単一経路で守る。
 func run(ctx context.Context, args []string, stdout, stderr *os.File) int {
+	var subcmdExit int
 	registry := runner.NewRegistry()
-	rootCmd := newRootCmd(registry, stdout)
+	rootCmd := newRootCmd(registry, stdout, &subcmdExit)
 	rootCmd.SetArgs(args)
 	rootCmd.SetOut(stdout)
 	rootCmd.SetErr(stderr)
@@ -45,12 +51,15 @@ func run(ctx context.Context, args []string, stdout, stderr *os.File) int {
 		fmt.Fprintln(stderr, err)
 		return 1
 	}
-	return 0
+	return subcmdExit
 }
 
 // newRootCmd は ctxd の root cobra.Command を組み立てる。
-// 個別サブコマンド登録は本関数の末尾で `addSubcommands(rootCmd, registry, ...)` の形で追加する想定。
-func newRootCmd(registry *runner.Registry, stdout *os.File) *cobra.Command {
+// exitCode は RunE から書き戻すサブコマンド exit code の格納先 (D7)。
+//
+// chdir 単独の現時点では subcommand を本関数内に直書きする。次タスクで git-switch を
+// 追加するタイミングで registerCommands helper への切り出しを検討する (Q2)。
+func newRootCmd(registry *runner.Registry, stdout *os.File, exitCode *int) *cobra.Command {
 	var (
 		human   bool
 		expects []string
@@ -75,10 +84,22 @@ func newRootCmd(registry *runner.Registry, stdout *os.File) *cobra.Command {
 	rootCmd.PersistentFlags().BoolVar(&human, "human", false, "human-readable output (pretty-printed JSON)")
 	rootCmd.PersistentFlags().StringArrayVar(&expects, "expect", nil, "postcondition assertion in KEY=VALUE form (repeatable)")
 
-	// 個別サブコマンドはこのタスクでは登録しない。
-	// 別タスクで registerCommands(rootCmd, registry, &human, &expects) のように追加する。
-	_ = registry
-	_ = stdout
+	// chdir サブコマンド登録。
+	registry.Register(chdir.New())
+	chdirCmd := &cobra.Command{
+		Use:   "chdir <path>",
+		Short: "Change directory and report cwd / git_branch / listing as JSON.",
+		Long: "Resolve the given path, list its contents, and report the git branch (if any) " +
+			"as structured JSON. The parent shell's cwd is not modified.",
+		Args: cobra.ExactArgs(1),
+		RunE: func(cmd *cobra.Command, args []string) error {
+			flags := runner.Flags{Human: human, Expect: expects}
+			*exitCode = dispatchAndWrite(cmd.Context(), registry, stdout, "chdir", args, flags)
+			// JSON は dispatchAndWrite で出力済み。cobra の error path に乗せず nil を返す。
+			return nil
+		},
+	}
+	rootCmd.AddCommand(chdirCmd)
 
 	return rootCmd
 }

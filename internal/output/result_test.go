@@ -144,7 +144,7 @@ func TestResult_Args_NilNormalized(t *testing.T) {
 
 // TestErrorCode_Retryable は ErrorCode の既定 retryable 判定が false であることを検証する。
 func TestErrorCode_Retryable(t *testing.T) {
-	codes := []ErrorCode{ErrInvalidArgs, ErrNotFound, ErrExecFailed, ErrPostconditionFailed}
+	codes := []ErrorCode{ErrInvalidArgs, ErrNotFound, ErrNotADirectory, ErrExecFailed, ErrPostconditionFailed}
 	for _, c := range codes {
 		if c.Retryable() {
 			t.Errorf("%s should not be retryable by default", c)

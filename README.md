@@ -121,6 +121,33 @@ ctxd git-switch main --expect branch=main --expect dirty=false
 
 `--human` flag switches to human-readable output for debugging.
 
+### `ctxd chdir`
+
+Resolve a path, list its contents, and report the git branch (if any):
+
+```sh
+ctxd chdir /path/to/repo
+```
+
+```json
+{
+  "ok": true,
+  "cmd": "chdir",
+  "args": ["/path/to/repo"],
+  "result": {
+    "cwd": "/path/to/repo",
+    "git_branch": "main",
+    "listing": ["docs", "go.mod", "src"]
+  },
+  "elapsed_ms": 3
+}
+```
+
+`git_branch` is `null` when the path is outside a git working tree or HEAD is detached.
+Errors return `ok: false` with `error.code` of `not_found` (path missing) or `not_a_directory` (path is a file).
+
+The parent shell's cwd is not modified — pass the resolved `cwd` to the next command instead.
+
 ---
 
 ## Installation

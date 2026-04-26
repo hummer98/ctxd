@@ -9,6 +9,8 @@ const (
 	ErrInvalidArgs ErrorCode = "invalid_args"
 	// ErrNotFound はパスやリソースが存在しない場合に返す。リトライ不可。
 	ErrNotFound ErrorCode = "not_found"
+	// ErrNotADirectory はパスは存在するがディレクトリではない（ファイル等）場合に返す。リトライ不可。
+	ErrNotADirectory ErrorCode = "not_a_directory"
 	// ErrExecFailed は子プロセスやシステムコールが失敗した場合に返す。
 	// transient かどうか判別困難なため MVP では保守的に retryable=false で扱う。
 	ErrExecFailed ErrorCode = "exec_failed"
