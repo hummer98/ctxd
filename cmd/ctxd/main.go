@@ -6,7 +6,7 @@
 // 終了コード規約 (MVP):
 //   - 成功 (Result.OK == true): 0
 //   - エラー (Result.OK == false): 1
-//   - postcondition 違反 (OK=true だが passed=false): 1
+//   - postcondition 違反は OK=false に統合 (error.code=postcondition_failed) → 1
 //
 // TODO(adr: 0002-exit-codes): postcondition 違反を exit 2 に分けるかは将来 ADR で議論する。
 // AI エージェントが「コマンドは成功したが状態が期待と違う」を exit code レベルで
@@ -16,6 +16,7 @@ package main
 import (
 	"context"
 	"fmt"
+	"io"
 	"os"
 
 	"github.com/spf13/cobra"
@@ -40,7 +41,11 @@ func main() {
 // サブコマンドの exit code は subcmdExit に集約する (D7)。
 // RunE 内で os.Exit を直呼びしないことで run() の戻り値で観察可能にし、
 // dispatchAndWrite の signature 変更を避けつつ exit code 規約を単一経路で守る。
-func run(ctx context.Context, args []string, stdout, stderr *os.File) int {
+//
+// signature: stdout / stderr は io.Writer に広げる (T010)。
+// e2e テストから *bytes.Buffer を直接渡せるようにし、test の可読性を上げるため。
+// production 呼び出し (main()) からは os.Stdout / os.Stderr を渡す。
+func run(ctx context.Context, args []string, stdout, stderr io.Writer) int {
 	var subcmdExit int
 	registry := runner.NewRegistry()
 	rootCmd := newRootCmd(registry, stdout, &subcmdExit)
@@ -61,7 +66,7 @@ func run(ctx context.Context, args []string, stdout, stderr *os.File) int {
 //
 // chdir 単独の現時点では subcommand を本関数内に直書きする。次タスクで git-switch を
 // 追加するタイミングで registerCommands helper への切り出しを検討する (Q2)。
-func newRootCmd(registry *runner.Registry, stdout *os.File, exitCode *int) *cobra.Command {
+func newRootCmd(registry *runner.Registry, stdout io.Writer, exitCode *int) *cobra.Command {
 	var (
 		human   bool
 		expects []string
@@ -141,14 +146,14 @@ func newRootCmd(registry *runner.Registry, stdout *os.File, exitCode *int) *cobr
 }
 
 // dispatchAndWrite はサブコマンドの RunE から呼ぶ想定の薄いブリッジ。
-// 個別サブコマンド実装が増えたタイミングで使い始める。
 //
-// 現時点ではサブコマンド未登録のため未使用だが、後続タスクが利用するシグネチャを
-// 固めるために定義しておく。
+// exit code 判定は !res.OK の単一経路に集約する (T010)。
+// postcondition 違反は runner.Dispatch 側で OK=false / error.code=postcondition_failed
+// に統合済みのため、ここで Postcondition.Passed を別ルートで見る必要はない。
 func dispatchAndWrite(
 	ctx context.Context,
 	registry *runner.Registry,
-	stdout *os.File,
+	stdout io.Writer,
 	name string,
 	args []string,
 	flags runner.Flags,
@@ -159,9 +164,6 @@ func dispatchAndWrite(
 		return 1
 	}
 	if !res.OK {
-		return 1
-	}
-	if res.Postcondition != nil && !res.Postcondition.Passed {
 		return 1
 	}
 	return 0

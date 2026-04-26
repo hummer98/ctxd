@@ -38,11 +38,15 @@ type Registry struct {
 	verifier postcondition.Verifier
 }
 
-// NewRegistry は空の Registry を生成する。verifier は NoOp で初期化する。
+// NewRegistry は空の Registry を生成する。verifier は Default で初期化する。
+//
+// 既定値を NoOp から Default に切り替えたのは T010 の要件:
+//   --expect が落ちたとき OK=false / error.code=postcondition_failed に統一する。
+// テストで「verifier 起動を抑止したい」場合は SetVerifier(postcondition.NoOp{}) を使う。
 func NewRegistry() *Registry {
 	return &Registry{
 		cmds:     map[string]Command{},
-		verifier: postcondition.NoOp{},
+		verifier: postcondition.Default{},
 	}
 }
 
@@ -111,11 +115,36 @@ func (r *Registry) Dispatch(ctx context.Context, name string, args []string, fla
 	if len(flags.Expect) > 0 && r.verifier != nil {
 		pc := r.verifier.Verify(flags.Expect, data)
 		res.Postcondition = pc
-		// passed=false でも res.OK は true のまま（exit code は main 側で判断する）。
+		if pc != nil && !pc.Passed {
+			// postcondition 違反は OK=false に統合する (T010)。
+			// Data は保持する: AI エージェントが「期待値 vs 実観測値」を 1 つの JSON で
+			// 判断できるようにするため (plan §5.1 / §5.2)。
+			res.OK = false
+			res.Data = data
+			res.Error = output.NewError(
+				output.ErrPostconditionFailed,
+				postconditionFailureMsg(pc),
+			)
+			res.ElapsedMs = time.Since(start).Milliseconds()
+			return res
+		}
 	}
 
 	res.OK = true
 	res.Data = data
 	res.ElapsedMs = time.Since(start).Milliseconds()
 	return res
+}
+
+// postconditionFailureMsg は Error.Message 用の短いサマリを組み立てる (plan §5.5)。
+// 詳細は Postcondition.Checks[] に任せ、message は「N of M checks did not pass」に留める。
+func postconditionFailureMsg(pc *output.Postcondition) string {
+	total := len(pc.Checks)
+	failed := 0
+	for _, c := range pc.Checks {
+		if !c.Passed {
+			failed++
+		}
+	}
+	return fmt.Sprintf("postcondition failed: %d of %d checks did not pass", failed, total)
 }

@@ -142,6 +142,99 @@ func TestResult_Args_NilNormalized(t *testing.T) {
 	}
 }
 
+// TestResult_PostconditionFailed_JSON は postcondition 失敗時の Result JSON 形を規定する。
+//
+// T010 で導入した「Data + Error + Postcondition の 3 キー共存」を明示的に固定する。
+// 既存 TestResult_Error_JSON は Data=nil 入力に対する omitempty の挙動を確認しているだけで、
+// 「OK=false なら result キーが出てはいけない」というガードは敷いていないため、
+// 本テストは別関数として追加し、両者を温存する (plan §5.2)。
+func TestResult_PostconditionFailed_JSON(t *testing.T) {
+	type chdirData struct {
+		Cwd       string  `json:"cwd"`
+		GitBranch *string `json:"git_branch"`
+	}
+
+	r := Result{
+		OK:   false,
+		Cmd:  "chdir",
+		Args: []string{"/bar"},
+		Data: chdirData{Cwd: "/bar", GitBranch: nil},
+		Error: &Error{
+			Code:      ErrPostconditionFailed,
+			Message:   "postcondition failed: 1 of 1 checks did not pass",
+			Retryable: false,
+		},
+		Postcondition: &Postcondition{
+			Passed: false,
+			Checks: []Check{
+				{Key: "cwd", Expected: "/foo", Actual: "/bar", Passed: false},
+			},
+		},
+		ElapsedMs: 5,
+	}
+
+	raw, err := MarshalJSON(r)
+	if err != nil {
+		t.Fatalf("MarshalJSON: %v", err)
+	}
+
+	var m map[string]any
+	if err := json.Unmarshal(raw, &m); err != nil {
+		t.Fatalf("unmarshal: %v", err)
+	}
+
+	// 全キー存在 (result + error + postcondition の 3 キー共存が本テストの主眼)。
+	for _, key := range []string{"ok", "cmd", "args", "result", "error", "postcondition", "elapsed_ms"} {
+		if _, ok := m[key]; !ok {
+			t.Errorf("expected key %q in JSON output, got %v", key, m)
+		}
+	}
+
+	if got := m["ok"]; got != false {
+		t.Errorf("ok: got %v, want false", got)
+	}
+
+	res, ok := m["result"].(map[string]any)
+	if !ok {
+		t.Fatalf("result: expected object, got %T", m["result"])
+	}
+	if got := res["cwd"]; got != "/bar" {
+		t.Errorf("result.cwd: got %v, want /bar", got)
+	}
+	if got, ok := res["git_branch"]; !ok || got != nil {
+		t.Errorf("result.git_branch: should be present and null, got (%v, exists=%v)", got, ok)
+	}
+
+	errObj, ok := m["error"].(map[string]any)
+	if !ok {
+		t.Fatalf("error: expected object, got %T", m["error"])
+	}
+	if got := errObj["code"]; got != "postcondition_failed" {
+		t.Errorf("error.code: got %v, want postcondition_failed", got)
+	}
+
+	pc, ok := m["postcondition"].(map[string]any)
+	if !ok {
+		t.Fatalf("postcondition: expected object, got %T", m["postcondition"])
+	}
+	if got := pc["passed"]; got != false {
+		t.Errorf("postcondition.passed: got %v, want false", got)
+	}
+	checks, ok := pc["checks"].([]any)
+	if !ok {
+		t.Fatalf("postcondition.checks: expected array, got %T", pc["checks"])
+	}
+	if len(checks) != 1 {
+		t.Fatalf("postcondition.checks: expected len=1, got %d", len(checks))
+	}
+	first := checks[0].(map[string]any)
+	for _, key := range []string{"key", "expected", "actual", "passed"} {
+		if _, ok := first[key]; !ok {
+			t.Errorf("checks[0] missing key %q (got %v)", key, first)
+		}
+	}
+}
+
 // TestErrorCode_Retryable は ErrorCode の既定 retryable 判定が false であることを検証する。
 func TestErrorCode_Retryable(t *testing.T) {
 	codes := []ErrorCode{ErrInvalidArgs, ErrNotFound, ErrNotADirectory, ErrExecFailed, ErrPostconditionFailed}
