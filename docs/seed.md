@@ -80,6 +80,32 @@ SKILL.md の本文（nudge 内容・postcondition 構文）は共通、プラッ
 
 ---
 
+## 実装方針 (Implementation Strategy)
+
+候補コマンド 20〜30 個（FS / env / git / プロセス / 外部ツール wrapper / ネットワーク / テキスト）の分布を踏まえ、以下の方針で実装する。
+
+### 一次方針: stdlib + shell-out のハイブリッド
+
+- **FS / env / プロセス / ネットワーク / テキスト**: Go stdlib (`os`, `os/exec`, `net/http`, `path/filepath`) で完結
+- **git 系**: `git` CLI を shell-out。`--porcelain=v2` / `-z`（NUL 区切り）で構造化出力を取り、parsing helper を `internal/gitops` に集約
+- **外部ツール wrapper (`npm-install` / `build` / `test` 等)**: shell-out 一択
+
+### SDK 取り込み方針
+
+- **採用しない**:
+  - `libgit2` 系（cgo 必要 → static binary 原則違反）
+  - `go-git/go-git`（bundle +5MB、MVP では shell-out で十分。将来 hot path で必要になれば `internal/gitops` interface 越しに差し替え可能）
+- **局所採用**:
+  - `godotenv` — `env-load` の `.env` parsing
+  - `doublestar` — glob が必要になった場合のみ
+- **CLI フレームワーク**: `spf13/cobra` または `urfave/cli/v3` を MVP から採用
+
+### parent shell 問題への扱い
+
+`ctxd chdir` / `ctxd env-set` は子プロセスとして起動されるため親シェルに副作用を返せない。MVP では **JSON で結果を返すのみ** とし、AI エージェントが次のコマンドで cwd / env を渡し直す前提で設計する。`eval $(ctxd env-set ...)` のような shell-eval モードは将来オプションとして検討余地を残す。
+
+---
+
 ## MVP スコープ（最初の 3 コマンド）
 
 | コマンド | 置き換え対象 | 出力フィールド |

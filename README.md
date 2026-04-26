@@ -1,5 +1,7 @@
 # ctxd
 
+**English** | [日本語](README.ja.md)
+
 **Declarative CLI commands that pass structured context to AI agents.**
 
 `ctxd` wraps the shell operations that AI agents get lost in — `cd`, `export`, `git checkout` — and returns structured JSON so the agent knows exactly what changed.
@@ -160,14 +162,6 @@ Compatible with Claude Code, OpenCode, Codex, Cursor, Gemini CLI, and any host t
 - **Postconditions are opt-in** — useful when you want them, invisible when you don't
 - **Narrow and deep** — top 20–30 commands done well, not full POSIX coverage
 - **Pluggable** — users can add their own declarative wrappers
-
----
-
-## Relationship to cmux-team
-
-[cmux-team](https://github.com/hummer98/cmux-team) is a multi-agent development orchestration framework built on Claude Code. Its design decisions — git worktree isolation, external FSM, CLI-only state mutation — are all structural responses to the same state-tracking problem `ctxd` addresses.
-
-`ctxd` is independent of cmux-team. cmux-team is the first dogfooding environment.
 
 ---
 
