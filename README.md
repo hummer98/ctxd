@@ -165,6 +165,37 @@ Compatible with Claude Code, OpenCode, Codex, Cursor, Gemini CLI, and any host t
 
 ---
 
+## Development
+
+### Prerequisites
+
+- Go 1.26 or later
+
+### Build
+
+```sh
+go build -o ctxd ./cmd/ctxd
+```
+
+### Run
+
+```sh
+./ctxd --version
+./ctxd --help
+```
+
+### Test
+
+```sh
+go test ./...
+```
+
+### Architecture decisions
+
+See [`docs/adr/`](docs/adr/) for design decisions (CLI framework selection etc.).
+
+---
+
 ## Status
 
 Early development. The design is settled; the implementation is not.

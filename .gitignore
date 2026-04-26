@@ -1,3 +1,6 @@
 .envrc
 .team/
 .worktrees/
+
+# Build artifacts
+/ctxd
