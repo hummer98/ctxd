@@ -176,6 +176,47 @@ On failure, `error.code` is one of `not_a_git_repo`, `branch_not_found`, `dirty_
 
 The parent shell's HEAD is updated (the switch is real) but cwd is not changed.
 
+### `ctxd env-set`
+
+Set one or more environment variables in this child process and report
+the resulting set map and diff (added / changed):
+
+```sh
+ctxd env-set FOO=bar BAZ=qux
+```
+
+```json
+{
+  "ok": true,
+  "cmd": "env-set",
+  "args": ["FOO=bar", "BAZ=qux"],
+  "result": {
+    "set": {"FOO": "bar", "BAZ": "qux"},
+    "diff": {
+      "added": ["BAZ"],
+      "changed": ["FOO"]
+    }
+  },
+  "elapsed_ms": 1
+}
+```
+
+`set` is the final KEY → value map of this invocation (last-write-wins
+when the same KEY is repeated). `diff.added` lists keys that were not
+previously in the environment; `diff.changed` lists keys whose value
+differed from the previous value. Keys whose value is unchanged appear
+in neither list.
+
+The argument format is `KEY=VAL`. The first `=` is the separator, so
+values may contain `=` (e.g. `URL=http://x?a=b`). An empty value
+(`KEY=`) is valid. On failure, `error.code` is `invalid_args` (missing
+`=`, empty `KEY`, or zero arguments) or `exec_failed` (the underlying
+`os.Setenv` call failed).
+
+The parent shell's environment is not modified — pass the resolved
+`set` to the next command, or read the JSON to know which variables
+the child process saw.
+
 ---
 
 ## Installation

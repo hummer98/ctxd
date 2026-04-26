@@ -23,6 +23,7 @@ import (
 	"github.com/hummer98/ctxd/internal/output"
 	"github.com/hummer98/ctxd/internal/runner"
 	"github.com/hummer98/ctxd/internal/runner/chdir"
+	envset "github.com/hummer98/ctxd/internal/runner/env_set"
 	gitswitch "github.com/hummer98/ctxd/internal/runner/git_switch"
 )
 
@@ -103,7 +104,7 @@ func newRootCmd(registry *runner.Registry, stdout *os.File, exitCode *int) *cobr
 	rootCmd.AddCommand(chdirCmd)
 
 	// git-switch サブコマンド登録。
-	// TODO: 3 つ目のサブコマンド追加時に registerCommands ヘルパへ抽出する。
+	// TODO: 4 つ目以降のサブコマンド追加時に registerCommands ヘルパへ抽出する。
 	registry.Register(gitswitch.New())
 	gitSwitchCmd := &cobra.Command{
 		Use:   "git-switch <branch>",
@@ -118,6 +119,23 @@ func newRootCmd(registry *runner.Registry, stdout *os.File, exitCode *int) *cobr
 		},
 	}
 	rootCmd.AddCommand(gitSwitchCmd)
+
+	// env-set サブコマンド登録。
+	registry.Register(envset.New())
+	envSetCmd := &cobra.Command{
+		Use:   "env-set <KEY=VAL>...",
+		Short: "Set environment variables and report set / diff as JSON.",
+		Long: "Set one or more environment variables in this child process and report " +
+			"the resulting `set` map and `diff` (added / changed) as structured JSON. " +
+			"The parent shell's environment is not modified.",
+		Args: cobra.MinimumNArgs(1),
+		RunE: func(cmd *cobra.Command, args []string) error {
+			flags := runner.Flags{Human: human, Expect: expects}
+			*exitCode = dispatchAndWrite(cmd.Context(), registry, stdout, "env-set", args, flags)
+			return nil
+		},
+	}
+	rootCmd.AddCommand(envSetCmd)
 
 	return rootCmd
 }

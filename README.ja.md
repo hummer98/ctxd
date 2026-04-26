@@ -176,6 +176,36 @@ ctxd git-switch main
 
 親シェルの HEAD は実際に切り替わります（switch は本物）が、cwd は変更されません。
 
+### `ctxd env-set`
+
+子プロセス内で環境変数を 1 個以上 set し、結果の set マップと diff (added / changed) を返します。
+
+```sh
+ctxd env-set FOO=bar BAZ=qux
+```
+
+```json
+{
+  "ok": true,
+  "cmd": "env-set",
+  "args": ["FOO=bar", "BAZ=qux"],
+  "result": {
+    "set": {"FOO": "bar", "BAZ": "qux"},
+    "diff": {
+      "added": ["BAZ"],
+      "changed": ["FOO"]
+    }
+  },
+  "elapsed_ms": 1
+}
+```
+
+`set` は今回の呼び出しで最終的に set した KEY → 値のマップです (同一 KEY が複数指定された場合は後勝ち)。 `diff.added` は呼び出し前の環境に存在しなかったキー、 `diff.changed` は呼び出し前と値が変わったキーです。 値が変わらなかったキーはどちらにも入りません。
+
+引数の形式は `KEY=VAL` です。区切りは最初の `=` なので、値に `=` を含められます (例: `URL=http://x?a=b`)。値が空 (`KEY=`) も valid です。失敗時は `error.code` が `invalid_args` (`=` がない / `KEY` が空 / 引数 0 個) または `exec_failed` (`os.Setenv` が失敗) になります。
+
+親シェルの環境変数は変更されません。返却された `set` を次のコマンドへ渡し直すか、JSON を読んで子プロセスが見た値を確認してください。
+
 ---
 
 ## インストール
