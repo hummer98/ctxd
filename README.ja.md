@@ -281,6 +281,28 @@ CLI フレームワーク選定など、設計上の判断は [`docs/adr/`](docs
 
 ---
 
+## Eval harness
+
+`evals/` には SKILL 遵守率を計測する harness があります。`cmux` で隔離したワークスペース内で本物の `claude` プロセスを起動し、SKILL.md が指定する場面で agent が `ctxd chdir` / `ctxd git-switch` / `ctxd env-set` を実際に呼ぶかを測定します。
+
+```sh
+bash evals/run.sh
+# シナリオあたりの試行回数を変える場合
+EVAL_N=1 bash evals/run.sh
+```
+
+出力は `evals/results/<UTC-timestamp>/` 配下:
+
+- `session-<id>-<trial>.jsonl` — claude-code が書いた raw セッション JSONL (1 試行 1 ファイル)
+- `session-<id>-<trial>.meta.json` — `exit_status`、所要秒、session id
+- `summary.md` — 全体 / シナリオ別の success rate と、fail / error の最初の 1 例
+
+コスト/時間の目安: 1 試行あたり数 cent。既定の `EVAL_N=3` × 5 シナリオで数十 cent〜$1、5〜10 分程度 (claude-code が解決するモデル次第)。プロンプトと期待パターンは [`evals/scenarios.jsonl`](evals/scenarios.jsonl) を参照してください。
+
+`evals/.eval-plugin/` (Skills loader に `skills/ctxd` を登録するためのシム) と `evals/results/` は git 管理外です — harness が毎回再生成します。
+
+---
+
 ## ステータス
 
 初期開発段階です。設計は固まっていますが、実装はこれからです。

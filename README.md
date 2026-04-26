@@ -292,6 +292,28 @@ See [`docs/adr/`](docs/adr/) for design decisions (CLI framework selection etc.)
 
 ---
 
+## Eval harness
+
+`evals/` contains a SKILL adherence harness that drives a real `claude` process inside an isolated `cmux` workspace and measures whether the agent reaches for `ctxd chdir` / `ctxd git-switch` / `ctxd env-set` when the SKILL says it should.
+
+```sh
+bash evals/run.sh
+# or override the per-scenario trial count
+EVAL_N=1 bash evals/run.sh
+```
+
+Outputs land in `evals/results/<UTC-timestamp>/`:
+
+- `session-<id>-<trial>.jsonl` — raw Claude Code session JSONL (one per trial)
+- `session-<id>-<trial>.meta.json` — `exit_status`, wall time, session id
+- `summary.md` — overall and per-scenario success rate, with the first failing tool_use quoted for context
+
+Cost / time budget: each trial spends a few model cents. Default `EVAL_N=3` × 5 scenarios ≈ a handful of dimes to ~$1 and 5–10 minutes wall-clock, depending on the model claude-code resolves to. See [`evals/scenarios.jsonl`](evals/scenarios.jsonl) for the prompts and expected patterns.
+
+`evals/.eval-plugin/` (plugin shim that wires `skills/ctxd` into the Skills loader) and `evals/results/` are git-ignored — the harness regenerates the shim on every run.
+
+---
+
 ## Status
 
 Early development. The design is settled; the implementation is not.

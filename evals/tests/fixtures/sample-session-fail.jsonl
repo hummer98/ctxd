@@ -1,0 +1,3 @@
+{"type":"user","message":{"role":"user","content":"カレントディレクトリを /tmp に切り替えて、その下に何があるか教えて"}}
+{"type":"assistant","isSidechain":false,"message":{"role":"assistant","content":[{"type":"tool_use","id":"toolu_02","name":"Bash","input":{"command":"cd /tmp && ls","description":"raw cd"}}]}}
+{"type":"user","message":{"role":"user","content":[{"type":"tool_result","tool_use_id":"toolu_02","content":"file1\nfile2"}]}}

@@ -1,0 +1,3 @@
+{"type":"user","message":{"role":"user","content":"foo"}}
+{"type":"assistant","isSidechain":true,"message":{"role":"assistant","content":[{"type":"tool_use","id":"toolu_sub","name":"Bash","input":{"command":"echo from-subagent"}}]}}
+{"type":"assistant","isSidechain":false,"message":{"role":"assistant","content":[{"type":"tool_use","id":"toolu_main","name":"Bash","input":{"command":"ctxd chdir /tmp"}}]}}

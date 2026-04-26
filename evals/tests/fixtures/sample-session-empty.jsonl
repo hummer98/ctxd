@@ -1,0 +1,2 @@
+{"type":"user","message":{"role":"user","content":"カレントディレクトリを /tmp に切り替えて、その下に何があるか教えて"}}
+{"type":"assistant","isSidechain":false,"message":{"role":"assistant","content":[{"type":"text","text":"申し訳ありませんが、私はディレクトリを変更できません。"}]}}

@@ -4,3 +4,11 @@
 
 # Build artifacts
 /ctxd
+
+# Eval harness (regenerated on each run)
+evals/.eval-plugin/
+evals/results/
+
+# Python bytecode (mainly from evals/summarize.py)
+__pycache__/
+*.pyc

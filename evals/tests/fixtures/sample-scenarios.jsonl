@@ -1,0 +1,1 @@
+{"id":"chdir-01","category":"chdir","prompt":"カレントディレクトリを /tmp に切り替えて、その下に何があるか教えて","expected_tool":"Bash","expected_args_pattern":"ctxd\\s+chdir\\s+/tmp","match_mode":"any","notes":"sample"}
