@@ -7,3 +7,6 @@
 | 20260427-072248 | 0.1.0 | 2.1.119 (Claude Code) | 9cf68f9 | 0.0% | chdir-01:0.0;chdir-02:0.0;git-switch-01:0.0;git-switch-02:0.0;env-set-01:0.0 |
 | 20260427-115434 | 0.1.1 | 2.1.119 (Claude Code) | 37d33d9 | 20.0% | chdir-01:0.0;chdir-02:0.0;git-switch-01:0.0;git-switch-02:0.0;env-set-01:1.0 |
 | 20260427-115756 | 0.1.1 | 2.1.119 (Claude Code) | 37d33d9 | 6.7% | chdir-01:0.0;chdir-02:0.0;git-switch-01:0.0;git-switch-02:0.0;env-set-01:0.33 |
+| 20260427-155915 | 0.1.2 | 2.1.119 (Claude Code) | e362a1d | 0.0% | chdir-01:0.0 |
+| 20260427-160032 | 0.1.2 | 2.1.119 (Claude Code) | e362a1d | 100.0% | chdir-01:1.0 |
+| 20260427-160126 | 0.1.2 | 2.1.119 (Claude Code) | e362a1d | 53.3% | chdir-01:0.67;chdir-02:1.0;git-switch-01:0.33;git-switch-02:0.0;env-set-01:0.67 |

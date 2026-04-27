@@ -1,6 +1,6 @@
 ---
 name: ctxd
-description: MUST be used instead of running raw `cd`, `export`, `unset`, `git checkout`, or `git switch` in Bash. Wraps shell state mutations with declarative ctxd commands (`ctxd chdir`, `ctxd env-set`, `ctxd git-switch`) that emit structured JSON describing cwd, environment, and git state in one observation. Trigger when the user asks to change directory, switch git branches, or set environment variables for the running task — not for Claude Code settings, hooks, or permissions (use `update-config` for those). Examples - "cd to /tmp", "switch to main branch", "set LOG_LEVEL=debug as env var", "環境変数にセット", "ブランチに切り替え", "ディレクトリに移って".
+description: This skill MUST be used for shell state mutations — cd, export, unset, git checkout, git switch. Use `ctxd chdir <path>`, `ctxd env-set KEY=val`, `ctxd git-switch <branch>` instead of raw Bash. The `update-config` skill is for Claude Code settings.json/hooks/permissions only — NOT for shell environment variables. Never run raw `cd`, `export`, `unset`, `git checkout`, or `git switch` in Bash. Also never substitute `cd` with `ls <path>`, or `git switch` with `git status` — even when the user says "教えて" / "確認して" / "see if", the requested mutation is mandatory and the JSON envelope is the deliverable. Each ctxd command emits one structured JSON envelope (cwd, env diff, branch / dirty / ahead / behind) in a single observation. Trigger whenever the user asks to change directory, switch git branches, or set/unset environment variables for the running task. Examples - "cd to /tmp", "switch to main branch", "set LOG_LEVEL=debug as env var", "環境変数にセット", "ブランチに切り替え", "ディレクトリに移って".
 license: Apache-2.0
 metadata:
   project: ctxd
@@ -8,6 +8,10 @@ metadata:
 ---
 
 ## Precondition: do not bypass with raw Bash
+
+> **NEVER run raw `cd`, `export`, `unset`, `git checkout`, or `git switch` in Bash.** Use `ctxd chdir`, `ctxd env-set`, `ctxd git-switch` instead.
+>
+> **For shell environment variables, use `ctxd env-set`. The `update-config` skill is unrelated — it edits Claude Code's `settings.json`, not the running task's environment.**
 
 Before running any of the following in `Bash`, **stop and use the matching `ctxd` subcommand instead**:
 
@@ -93,6 +97,16 @@ ctxd chdir /tmp
 
 The `result.listing` already contains the directory entries — no need to chain `&& ls` afterwards.
 
+**Negative example — observed in evals (do NOT do this)**:
+
+When the user said "カレントディレクトリを /tmp に切り替えて、その下に何があるか教えて", the agent ran:
+
+```bash
+ls /tmp
+```
+
+This is wrong even though it returns a listing. The user asked for *both* a directory change *and* its contents — `ls /tmp` only observes, it does not change `cwd`. Use `ctxd chdir /tmp` to land in the directory and get the listing in one structured payload. Do not treat "教えて" / "確認して" as license to skip the mutation; the JSON envelope is the deliverable.
+
 Expected JSON:
 
 ```json
@@ -136,6 +150,16 @@ git switch main && git status
 ```bash
 ctxd git-switch main
 ```
+
+**Negative example — observed in evals (do NOT do this)**:
+
+When the user said "main ブランチに切り替えて、作業ツリーが綺麗かどうか確認して", the agent ran:
+
+```bash
+git status && git branch -a
+```
+
+This inspects state but does not switch. The user asked to switch *and* check cleanliness — `ctxd git-switch main` returns `branch`, `dirty`, `ahead`, `behind` in one JSON observation, satisfying both halves of the request without a separate `git status`. Never run `git status` as a "preflight" before `ctxd git-switch`; the envelope already includes the post-switch state.
 
 Expected JSON:
 
@@ -203,6 +227,10 @@ export LOG_LEVEL=debug
 ```bash
 ctxd env-set LOG_LEVEL=debug
 ```
+
+**Negative example — observed in evals (do NOT do this)**:
+
+When the user said "LOG_LEVEL=debug を環境変数にセットして、どの key が新規追加されたか教えて", the agent invoked the `update-config` skill to edit Claude Code's `settings.json`. This is wrong: `update-config` configures the Claude Code harness (hooks, permissions, settings.json) and does **not** mutate the running task's shell environment. The `diff.added` field the user asked for is what `ctxd env-set LOG_LEVEL=debug` returns. If you see "環境変数" / "env var" in a task prompt and it is not about Claude Code's own configuration, this is the skill — not `update-config`.
 
 Expected JSON:
 

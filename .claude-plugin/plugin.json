@@ -1,6 +1,6 @@
 {
   "name": "ctxd",
-  "version": "0.1.1",
+  "version": "0.1.2",
   "description": "Declarative companion to shell state mutations (cd, export, git checkout/switch). Emits structured JSON describing cwd, env, and git state.",
   "skills": ["./skills/ctxd"],
   "license": "Apache-2.0"
