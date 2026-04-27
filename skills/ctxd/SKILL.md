@@ -1,11 +1,25 @@
 ---
 name: ctxd
-description: Wraps shell state mutations (cd, export, unset, git checkout, git switch) with declarative ctxd commands that emit structured JSON describing cwd, environment, and git state. Use whenever the agent is about to run cd, export/unset, or git checkout/switch in Bash and needs to observe the resulting cwd, env diff, or branch state, or when a task asks to verify directory, env-var, or branch changes.
+description: MUST be used instead of running raw `cd`, `export`, `unset`, `git checkout`, or `git switch` in Bash. Wraps shell state mutations with declarative ctxd commands (`ctxd chdir`, `ctxd env-set`, `ctxd git-switch`) that emit structured JSON describing cwd, environment, and git state in one observation. Trigger when the user asks to change directory, switch git branches, or set environment variables for the running task — not for Claude Code settings, hooks, or permissions (use `update-config` for those). Examples - "cd to /tmp", "switch to main branch", "set LOG_LEVEL=debug as env var", "環境変数にセット", "ブランチに切り替え", "ディレクトリに移って".
 license: Apache-2.0
 metadata:
   project: ctxd
   source: https://github.com/hummer98/ctxd
 ---
+
+## Precondition: do not bypass with raw Bash
+
+Before running any of the following in `Bash`, **stop and use the matching `ctxd` subcommand instead**:
+
+| Raw Bash (do NOT use) | Use this instead |
+|---|---|
+| `cd <path>` | `ctxd chdir <path>` |
+| `export KEY=val`, `unset KEY` | `ctxd env-set KEY=val` |
+| `git checkout <branch>`, `git switch <branch>` | `ctxd git-switch <branch>` |
+
+This applies even when the task seems trivial (e.g. "just `cd /tmp` and `ls`"). The point is the structured JSON observation, not the side effect: running raw `cd && ls` forces an extra reasoning step on the agent and loses branch / env context that ctxd would have surfaced for free.
+
+Out of scope (use plain `Bash`): read-only inspection (`ls`, `cat`, `git status`, `git log`), commands without a matching ctxd subcommand, and Claude Code harness configuration (`settings.json`, hooks, permissions — those belong to the `update-config` skill, not this one).
 
 ## When to use ctxd
 
@@ -19,7 +33,7 @@ Prefer the matching `ctxd` command in these situations:
 - A task asks the agent to verify directory, env-var, or branch state after a change.
 - The next planning step needs to read the post-mutation state (e.g. "after switching, list the staged files" — start from `result.dirty`).
 
-This skill is a nudge, not a guard. `Bash(cd ...)` is still legal; ctxd just lets the agent skip an extra observation step when the structured payload would be more useful than free-form shell output.
+This skill is **the required path** for `cd`, `export`/`unset`, and `git checkout`/`git switch`. Falling back to raw `Bash(cd ...)` is reserved for cases where ctxd genuinely has no matching subcommand (e.g. `pushd`, `popd`, `git rebase`). When in doubt, prefer the ctxd subcommand.
 
 ## Output contract
 
@@ -65,6 +79,20 @@ About to `cd /repo/src`? Run `ctxd chdir /repo/src` to land in the directory and
 ctxd chdir /repo/src
 ```
 
+**❌ Wrong** (loses branch + listing context):
+
+```bash
+cd /tmp && ls
+```
+
+**✅ Correct** (one structured observation):
+
+```bash
+ctxd chdir /tmp
+```
+
+The `result.listing` already contains the directory entries — no need to chain `&& ls` afterwards.
+
 Expected JSON:
 
 ```json
@@ -95,6 +123,18 @@ About to `git switch feature-x`? Run `ctxd git-switch feature-x` to verify the b
 
 ```bash
 ctxd git-switch feature-x
+```
+
+**❌ Wrong** (forces a separate `git status` to see the working tree):
+
+```bash
+git switch main && git status
+```
+
+**✅ Correct** (`dirty`, `ahead`, `behind` come back in one payload):
+
+```bash
+ctxd git-switch main
 ```
 
 Expected JSON:
@@ -144,6 +184,24 @@ About to `export DATABASE_URL=postgres://localhost/foo`? Run `ctxd env-set DATAB
 
 ```bash
 ctxd env-set DATABASE_URL=postgres://localhost/foo LOG_LEVEL=debug
+```
+
+**❌ Wrong** (no diff, parent shell un-mutated anyway):
+
+```bash
+export LOG_LEVEL=debug
+```
+
+**❌ Also wrong** (this skill is for the running task's env vars, NOT for Claude Code's `settings.json`):
+
+> Skill: `update-config` with `set LOG_LEVEL=debug as environment variable`
+
+`update-config` is for Claude Code's harness configuration (settings.json, hooks, permissions). For the running task's shell environment variables, use `ctxd env-set` instead.
+
+**✅ Correct** (one envelope, with `diff.added` listing new keys):
+
+```bash
+ctxd env-set LOG_LEVEL=debug
 ```
 
 Expected JSON:
@@ -210,8 +268,8 @@ Until T10 finalizes the DSL, treat `--expect` as a hint to the agent only; do no
 
 ## Tone & non-goals
 
-- ctxd is a **declarative companion** to POSIX, not a replacement. `Bash(cd ...)` and friends keep working; ctxd is preferred when a structured observation would save the agent an extra step.
-- The skill is a **nudge by preference, not a guard**. The agent is free to fall back to raw shell when ctxd has no matching command.
+- ctxd is a **declarative companion** to POSIX. `Bash(cd ...)`, `export`, `git switch` etc. still execute, but the agent **MUST** prefer the matching ctxd subcommand whenever one exists, because ctxd's structured observation removes a reasoning step the agent would otherwise have to do manually.
+- Fallback to raw shell is allowed **only when ctxd has no matching subcommand** (e.g. `pushd`, `popd`, `git rebase`). Read-only inspection (`ls`, `cat`, `git status`) is also out of scope per the Precondition section above.
 - ctxd runs every command in a child process. **The parent shell's `cwd` and environment are never modified** (see `docs/seed.md` "parent shell 問題への扱い"). Treat each invocation as the source of truth for the state it just observed, and re-pass arguments on the next call as needed.
 - ctxd does not require network access; all commands are local and side effects stay inside the child process.
 - Out of scope: read-only inspection that doesn't mutate state (`ls`, `cat`, `git status`), long-running processes (`npm start`, `go run ./...`), and any command without a matching ctxd subcommand. Use plain `Bash` for those.
