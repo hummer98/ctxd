@@ -77,12 +77,17 @@ trap cleanup_outer EXIT INT TERM
 run_one() {
   local scenario_json="$1" trial="$2"
   local id prompt session_id started_at out_jsonl out_meta
+  local tool_uses_out stop_sentinel settings_path
   id=$(jq -r '.id' <<<"$scenario_json")
   prompt=$(jq -r '.prompt' <<<"$scenario_json")
   session_id=$(uuidgen | tr 'A-Z' 'a-z')
   started_at=$(date -u +%FT%TZ)
   out_jsonl="$RESULTS_DIR/session-$id-$trial.jsonl"
   out_meta="$RESULTS_DIR/session-$id-$trial.meta.json"
+  # T015: hook-based completion detection 用の per-trial 成果物.
+  tool_uses_out="$RESULTS_DIR/session-$id-$trial.tools.jsonl"
+  stop_sentinel="$RESULTS_DIR/session-$id-$trial.done"
+  settings_path="$RESULTS_DIR/session-$id-$trial.settings.json"
 
   echo "[$id #$trial] session_id=$session_id"
 
@@ -99,9 +104,16 @@ run_one() {
   LAST_WS="$WS"
   cmux rename-workspace --workspace "$WS" "eval-$id-$trial" >/dev/null 2>&1 || true
 
-  # ---------- claude 起動 (M3: send は raw、enter は send-key 別途) ----------
+  # ---------- T015: settings.json 生成 ----------
+  # PostToolUse hook で tool_use を JSONL に記録 + Stop hook で sentinel を touch.
+  bash "$REPO_ROOT/evals/lib/build_settings.sh" \
+    --tool-uses-out "$tool_uses_out" \
+    --stop-sentinel "$stop_sentinel" \
+    --out           "$settings_path" >/dev/null
+
+  # ---------- claude 起動 (M3: send は raw、enter は send-key 別途 / T015: --settings 追加) ----------
   cmux send --workspace "$WS" \
-    "claude --session-id $session_id --plugin-dir $PLUGIN_DIR --dangerously-skip-permissions"
+    "claude --session-id $session_id --plugin-dir $PLUGIN_DIR --settings $settings_path --dangerously-skip-permissions"
   cmux send-key --workspace "$WS" enter
 
   if ! poll_for_ready "$WS" 30; then
@@ -119,14 +131,26 @@ run_one() {
   cmux send --workspace "$WS" -- "$prompt"
   cmux send-key --workspace "$WS" enter
 
-  # ---------- 完了 polling ----------
-  if ! poll_for_completion "$WS" "$RUN_TIMEOUT_SECONDS"; then
+  # ---------- T015: sentinel 待ち (画面スクレイピング poll_for_completion を置換) ----------
+  # Stop hook が touch する sentinel ファイルの出現を 0.5 秒粒度で待つ.
+  local elapsed=0
+  local max_iters=$((RUN_TIMEOUT_SECONDS * 2))
+  local timed_out=1
+  while (( elapsed < max_iters )); do
+    if [[ -f "$stop_sentinel" ]]; then
+      timed_out=0
+      break
+    fi
+    sleep 0.5
+    elapsed=$((elapsed + 1))
+  done
+  if (( timed_out == 1 )); then
     cmux send-key --workspace "$WS" 'ctrl+c' 2>/dev/null || true
     record_meta error "timeout"
     # JSONL は途中まででも回収を試みるので return しない
   fi
 
-  # ---------- JSONL 取得 ----------
+  # ---------- JSONL 取得 (fallback 経路は維持) ----------
   local encoded src
   encoded=$(encode_cwd "$REPO_ROOT")
   src="$HOME/.claude/projects/$encoded/$session_id.jsonl"

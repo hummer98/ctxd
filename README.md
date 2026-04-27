@@ -302,10 +302,20 @@ bash evals/run.sh
 EVAL_N=1 bash evals/run.sh
 ```
 
+Each trial spins up `claude --settings <per-trial>.json` so a `Stop` hook
+touches a sentinel file when the session ends, and a `PostToolUse` hook
+appends each tool_use to `session-<id>-<trial>.tools.jsonl`. The runner
+waits on the sentinel instead of scraping the screen, and `summarize.py`
+reads tool_use from the hook JSONL first (falling back to the raw Claude
+session JSONL if the hook output is empty).
+
 Outputs land in `evals/results/<UTC-timestamp>/`:
 
 - `session-<id>-<trial>.jsonl` — raw Claude Code session JSONL (one per trial, git-ignored)
 - `session-<id>-<trial>.meta.json` — `exit_status`, wall time, session id (git-ignored)
+- `session-<id>-<trial>.tools.jsonl` — PostToolUse hook output, one tool_use per line (git-ignored)
+- `session-<id>-<trial>.done` — Stop hook sentinel marking session completion (git-ignored)
+- `session-<id>-<trial>.settings.json` — per-trial `claude --settings` payload wiring the hooks (git-ignored)
 - `summary.md` — overall and per-scenario success rate, plus the first failing tool_use quoted for context. Header records `plugin version`, `git SHA`, `git branch`, and `claude version` so each run is uniquely traceable.
 
 Cross-run trend lives in `evals/results/index.md` and `evals/results/index.csv` (one row per run). Both are committed; the heavy JSONL / meta files are not — re-running the harness regenerates them.

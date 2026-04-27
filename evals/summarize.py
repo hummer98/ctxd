@@ -33,13 +33,41 @@ ID_PATTERN = re.compile(r"^[a-zA-Z0-9_-]+$")
 
 # --------------------------- JSONL 抽出 ---------------------------
 
-def extract_tool_uses(jsonl_path: Path | str) -> List[Dict[str, Any]]:
-    """assistant の tool_use ブロックを順序保持で抽出する (plan §6.2)."""
+def _extract_from_hook_jsonl(path: Path) -> List[Dict[str, Any]]:
+    """T015: PostToolUse hook が書いた JSONL から tool_use を抽出する.
+
+    入力形式: 1 行あたり `{"name", "input", "tool_use_id", "ts"}`.
+    出力 shape は session JSONL 経路と同じ `{"name", "input"}`.
+    """
+    out: List[Dict[str, Any]] = []
+    if not path.exists() or path.stat().st_size == 0:
+        return out
+    with path.open("r", encoding="utf-8") as f:
+        for raw in f:
+            raw = raw.strip()
+            if not raw:
+                continue
+            try:
+                obj = json.loads(raw)
+            except json.JSONDecodeError:
+                continue
+            if not isinstance(obj, dict):
+                continue
+            out.append(
+                {
+                    "name": obj.get("name"),
+                    "input": obj.get("input", {}) or {},
+                }
+            )
+    return out
+
+
+def _extract_from_session_jsonl(path: Path) -> List[Dict[str, Any]]:
+    """claude session JSONL から assistant.tool_use を抽出する (従来 fallback 経路)."""
     tool_uses: List[Dict[str, Any]] = []
-    p = Path(jsonl_path)
-    if not p.exists() or p.stat().st_size == 0:
+    if not path.exists() or path.stat().st_size == 0:
         return tool_uses
-    with p.open("r", encoding="utf-8") as f:
+    with path.open("r", encoding="utf-8") as f:
         for raw in f:
             raw = raw.strip()
             if not raw:
@@ -66,6 +94,27 @@ def extract_tool_uses(jsonl_path: Path | str) -> List[Dict[str, Any]]:
                         }
                     )
     return tool_uses
+
+
+def extract_tool_uses(
+    jsonl_path: Path | str,
+    hook_path: Path | str | None = None,
+) -> List[Dict[str, Any]]:
+    """tool_use を抽出する (T015).
+
+    優先順位:
+    1. hook_path (PostToolUse hook 出力 JSONL) が存在し非空なら、それを使う.
+    2. jsonl_path (claude session JSONL) を fallback として読む.
+    3. 両方とも空なら [] を返す.
+
+    後方互換: hook_path=None なら従来通り session JSONL のみを読む.
+    """
+    if hook_path is not None:
+        hp = Path(hook_path)
+        records = _extract_from_hook_jsonl(hp)
+        if records:
+            return records
+    return _extract_from_session_jsonl(Path(jsonl_path))
 
 
 # --------------------------- 判定 ---------------------------
@@ -176,7 +225,9 @@ def load_results(results_dir: Path | str, scenarios: List[Dict[str, Any]]) -> Li
         jsonl_path = jsonl_path.with_suffix(".jsonl")
         if not jsonl_path.name.endswith(".jsonl"):
             jsonl_path = Path(str(meta_path).replace(".meta.json", ".jsonl"))
-        tool_uses = extract_tool_uses(jsonl_path)
+        # T015: hook 出力 (session-*.tools.jsonl) を優先、session JSONL は fallback
+        hook_path = Path(str(meta_path).replace(".meta.json", ".tools.jsonl"))
+        tool_uses = extract_tool_uses(jsonl_path, hook_path=hook_path)
         exit_status = meta.get("exit_status", "ok")
         verdict = match(scenario, tool_uses, exit_status)
         results.append(

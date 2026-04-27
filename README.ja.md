@@ -291,10 +291,15 @@ bash evals/run.sh
 EVAL_N=1 bash evals/run.sh
 ```
 
+各 trial は `claude --settings <per-trial>.json` を経由して起動し、 `Stop` hook がセッション終了時に sentinel ファイルを touch、 `PostToolUse` hook が各 tool_use を `session-<id>-<trial>.tools.jsonl` に append します。runner は画面スクレイピングではなく sentinel の出現を待ち、 `summarize.py` は hook 出力 JSONL を第一優先で読み (空なら claude 本体の session JSONL に fallback) tool_use を抽出します。
+
 出力は `evals/results/<UTC-timestamp>/` 配下:
 
 - `session-<id>-<trial>.jsonl` — claude-code が書いた raw セッション JSONL (1 試行 1 ファイル、git 管理外)
 - `session-<id>-<trial>.meta.json` — `exit_status`、所要秒、session id (git 管理外)
+- `session-<id>-<trial>.tools.jsonl` — PostToolUse hook が書く tool_use ごとの 1 行 JSONL (git 管理外)
+- `session-<id>-<trial>.done` — Stop hook が touch するセッション完了 sentinel (git 管理外)
+- `session-<id>-<trial>.settings.json` — `claude --settings` に渡す trial ごとの hook 設定 (git 管理外)
 - `summary.md` — 全体 / シナリオ別の success rate と、fail / error の最初の 1 例。ヘッダに `plugin version` / `git SHA` / `git branch` / `claude version` を併記し、各 run を一意に追跡できるようにしている。
 
 run 横断の trend は `evals/results/index.md` と `evals/results/index.csv` (1 run = 1 行) に蓄積されます。これらの軽量メタは commit 対象、重い JSONL / meta.json は git 管理外 (再 run で再現可能)。

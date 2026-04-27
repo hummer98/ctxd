@@ -11,6 +11,8 @@ evals/.eval-plugin/
 # 重い JSONL / meta.json は再 run で再現できるので ignore する (T014 plan §2).
 evals/results/*/session-*.jsonl
 evals/results/*/session-*.meta.json
+evals/results/*/session-*.done
+evals/results/*/session-*.settings.json
 
 # Python bytecode (mainly from evals/summarize.py)
 __pycache__/

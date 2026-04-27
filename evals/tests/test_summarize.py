@@ -41,6 +41,41 @@ class TestExtractToolUses(unittest.TestCase):
         self.assertEqual(tool_uses, [])
 
 
+class TestExtractToolUsesFromHook(unittest.TestCase):
+    """T015: hook 出力 (PostToolUse hook の JSONL) から tool_use を抽出する."""
+
+    def test_reads_hook_jsonl_when_present(self):
+        hook_path = FIXTURES / "sample-tools-pass.jsonl"
+        # 存在しない jsonl_path を指定しても、hook_path 優先で読まれる
+        tool_uses = summarize.extract_tool_uses(
+            jsonl_path=FIXTURES / "does-not-exist.jsonl",
+            hook_path=hook_path,
+        )
+        self.assertEqual(len(tool_uses), 1)
+        self.assertEqual(tool_uses[0]["name"], "Bash")
+        self.assertEqual(tool_uses[0]["input"].get("command"), "ctxd chdir /tmp")
+
+    def test_falls_back_to_session_jsonl_when_hook_empty(self):
+        with tempfile.TemporaryDirectory() as td:
+            empty_hook = Path(td) / "tools.jsonl"
+            empty_hook.write_text("", encoding="utf-8")
+            tool_uses = summarize.extract_tool_uses(
+                jsonl_path=FIXTURES / "sample-session-pass.jsonl",
+                hook_path=empty_hook,
+            )
+        # session JSONL から fallback で 1 件抽出される
+        self.assertEqual(len(tool_uses), 1)
+        self.assertEqual(tool_uses[0]["name"], "Bash")
+        self.assertEqual(tool_uses[0]["input"].get("command"), "ctxd chdir /tmp")
+
+    def test_returns_empty_when_both_missing(self):
+        tool_uses = summarize.extract_tool_uses(
+            jsonl_path=FIXTURES / "does-not-exist.jsonl",
+            hook_path=FIXTURES / "also-not-exist.jsonl",
+        )
+        self.assertEqual(tool_uses, [])
+
+
 class TestMatchPassFailError(unittest.TestCase):
     """T3: pass / fail / error 判定 (plan §6.3)."""
 

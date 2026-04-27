@@ -100,30 +100,6 @@ poll_for_ready() {
   return 1
 }
 
-# ---------- poll_for_completion ----------
-# 応答完了を待つ: 末尾近くに `❯` が単独で見えて、かつ `Esc to interrupt` が消えていること。
-# 2 秒間隔で polling。
-#
-# Usage: poll_for_completion <workspace> <timeout-seconds>
-# 戻り値: 0 = 完了, 非 0 = timeout
-poll_for_completion() {
-  local ws="$1" timeout="$2"
-  local deadline=$(( $(date +%s) + timeout ))
-  while (( $(date +%s) < deadline )); do
-    local screen
-    screen=$(cmux read-screen --workspace "$ws" --lines 60 2>/dev/null || true)
-    if printf '%s' "$screen" | grep -q 'Esc to interrupt'; then
-      sleep 2
-      continue
-    fi
-    if printf '%s' "$screen" | grep -q '❯'; then
-      return 0
-    fi
-    sleep 2
-  done
-  return 1
-}
-
 # ---------- wait_for_jsonl ----------
 # 指定 path の JSONL ファイルが存在し size > 0 になるのを 0.5 秒間隔で待つ。
 #
