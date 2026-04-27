@@ -293,13 +293,17 @@ EVAL_N=1 bash evals/run.sh
 
 出力は `evals/results/<UTC-timestamp>/` 配下:
 
-- `session-<id>-<trial>.jsonl` — claude-code が書いた raw セッション JSONL (1 試行 1 ファイル)
-- `session-<id>-<trial>.meta.json` — `exit_status`、所要秒、session id
-- `summary.md` — 全体 / シナリオ別の success rate と、fail / error の最初の 1 例
+- `session-<id>-<trial>.jsonl` — claude-code が書いた raw セッション JSONL (1 試行 1 ファイル、git 管理外)
+- `session-<id>-<trial>.meta.json` — `exit_status`、所要秒、session id (git 管理外)
+- `summary.md` — 全体 / シナリオ別の success rate と、fail / error の最初の 1 例。ヘッダに `plugin version` / `git SHA` / `git branch` / `claude version` を併記し、各 run を一意に追跡できるようにしている。
+
+run 横断の trend は `evals/results/index.md` と `evals/results/index.csv` (1 run = 1 行) に蓄積されます。これらの軽量メタは commit 対象、重い JSONL / meta.json は git 管理外 (再 run で再現可能)。
+
+plugin version は `.claude-plugin/plugin.json` の `version` を真のソースとし、計測比較の単位として扱います。SKILL.md を変更した際の version バンプ運用は [`CLAUDE.md`](CLAUDE.md) を参照してください。
 
 コスト/時間の目安: 1 試行あたり数 cent。既定の `EVAL_N=3` × 5 シナリオで数十 cent〜$1、5〜10 分程度 (claude-code が解決するモデル次第)。プロンプトと期待パターンは [`evals/scenarios.jsonl`](evals/scenarios.jsonl) を参照してください。
 
-`evals/.eval-plugin/` (Skills loader に `skills/ctxd` を登録するためのシム) と `evals/results/` は git 管理外です — harness が毎回再生成します。
+`evals/.eval-plugin/` (Skills loader に `skills/ctxd` を登録するためのシム) は git 管理外です — harness が毎回再生成し、`.claude-plugin/plugin.json` の `version` を動的に書き込みます。
 
 ---
 

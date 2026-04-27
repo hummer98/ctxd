@@ -304,13 +304,17 @@ EVAL_N=1 bash evals/run.sh
 
 Outputs land in `evals/results/<UTC-timestamp>/`:
 
-- `session-<id>-<trial>.jsonl` — raw Claude Code session JSONL (one per trial)
-- `session-<id>-<trial>.meta.json` — `exit_status`, wall time, session id
-- `summary.md` — overall and per-scenario success rate, with the first failing tool_use quoted for context
+- `session-<id>-<trial>.jsonl` — raw Claude Code session JSONL (one per trial, git-ignored)
+- `session-<id>-<trial>.meta.json` — `exit_status`, wall time, session id (git-ignored)
+- `summary.md` — overall and per-scenario success rate, plus the first failing tool_use quoted for context. Header records `plugin version`, `git SHA`, `git branch`, and `claude version` so each run is uniquely traceable.
+
+Cross-run trend lives in `evals/results/index.md` and `evals/results/index.csv` (one row per run). Both are committed; the heavy JSONL / meta files are not — re-running the harness regenerates them.
+
+The plugin version comes from `.claude-plugin/plugin.json` and acts as the canonical unit for comparing measurements. See [`CLAUDE.md`](CLAUDE.md) for the bump policy when SKILL.md changes.
 
 Cost / time budget: each trial spends a few model cents. Default `EVAL_N=3` × 5 scenarios ≈ a handful of dimes to ~$1 and 5–10 minutes wall-clock, depending on the model claude-code resolves to. See [`evals/scenarios.jsonl`](evals/scenarios.jsonl) for the prompts and expected patterns.
 
-`evals/.eval-plugin/` (plugin shim that wires `skills/ctxd` into the Skills loader) and `evals/results/` are git-ignored — the harness regenerates the shim on every run.
+`evals/.eval-plugin/` (plugin shim that wires `skills/ctxd` into the Skills loader) is git-ignored — the harness regenerates the shim on every run, dynamically writing the `version` from `.claude-plugin/plugin.json`.
 
 ---
 

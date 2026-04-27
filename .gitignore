@@ -7,7 +7,10 @@
 
 # Eval harness (regenerated on each run)
 evals/.eval-plugin/
-evals/results/
+# evals/results/ の軽量メタ (summary.md / index.{md,csv}) は commit 対象。
+# 重い JSONL / meta.json は再 run で再現できるので ignore する (T014 plan §2).
+evals/results/*/session-*.jsonl
+evals/results/*/session-*.meta.json
 
 # Python bytecode (mainly from evals/summarize.py)
 __pycache__/

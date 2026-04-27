@@ -203,6 +203,9 @@ def render_summary(
     n: int,
     timestamp: str,
     model: str = "(claude-code default)",
+    plugin_version: str = "(unknown)",
+    git_sha: str = "(unknown)",
+    git_branch: str = "(unknown)",
 ) -> str:
     total = len(results)
     pass_count = sum(1 for r in results if r["verdict"] == "pass")
@@ -214,6 +217,9 @@ def render_summary(
     lines.append(f"# Eval Summary {timestamp}")
     lines.append("")
     lines.append("- harness: claude-code via cmux")
+    lines.append(f"- plugin version: {plugin_version}")
+    lines.append(f"- git SHA: {git_sha}")
+    lines.append(f"- git branch: {git_branch}")
     lines.append(f"- claude version: {claude_version}")
     lines.append(f"- model: {model}")
     lines.append(f"- N (trials per scenario): {n}")
@@ -271,6 +277,93 @@ def render_summary(
     return "\n".join(lines).rstrip() + "\n"
 
 
+INDEX_MD_HEADING = (
+    "# Eval Index\n"
+    "\n"
+    "| timestamp | plugin_version | claude_version | git_sha | overall_rate | per_scenario_rates |\n"
+    "|---|---|---|---|---|---|\n"
+)
+INDEX_CSV_HEADING = (
+    "timestamp,plugin_version,claude_version,git_sha,overall_rate,per_scenario_rates\n"
+)
+
+
+def _overall_rate(results: List[Dict[str, Any]]) -> float:
+    """全 trial 中の pass 率 (0.0-1.0)。trial 0 件なら 0.0."""
+    total = len(results)
+    if not total:
+        return 0.0
+    pass_count = sum(1 for r in results if r["verdict"] == "pass")
+    return round(pass_count / total, 4)
+
+
+def _per_scenario_rates(
+    results: List[Dict[str, Any]],
+    scenarios: List[Dict[str, Any]],
+) -> List[tuple]:
+    """scenarios の入力順で `[(id, rate)]` を返す.
+
+    rate は scenario 内の `pass / trials` (0.0-1.0)。trial 0 件 / 全 error は 0.0.
+    入力順を保証するため scenarios リストの順序で並べる (S1)。
+    """
+    by_sid: Dict[str, List[Dict[str, Any]]] = {}
+    for r in results:
+        by_sid.setdefault(r["scenario_id"], []).append(r)
+    out: List[tuple] = []
+    for s in scenarios:
+        sid = s["id"]
+        rs = by_sid.get(sid, [])
+        trials = len(rs)
+        if not trials:
+            out.append((sid, 0.0))
+            continue
+        passes = sum(1 for r in rs if r["verdict"] == "pass")
+        out.append((sid, round(passes / trials, 2)))
+    return out
+
+
+def render_index_row(
+    timestamp: str,
+    plugin_version: str,
+    claude_version: str,
+    git_sha: str,
+    overall_rate: float,
+    per_scenario: List[tuple],
+) -> tuple:
+    """index.md / index.csv の 1 行をそれぞれ返す (`md_row`, `csv_row`).
+
+    plan §5.3 の列定義:
+    - overall_rate は `66.7%` 形式 (小数 1 桁、`%` 付き)
+    - per_scenario_rates は `<id>:<rate>` を `;` 区切り、CSV 同居のため `,` 不在
+    - claude_version の `,` は `;` に置換 (CSV 安全化)
+    """
+    rate_pct = f"{overall_rate * 100:.1f}%"
+    per_str = ";".join(f"{sid}:{rate}" for sid, rate in per_scenario)
+    safe_claude = claude_version.replace(",", ";")
+    md_row = (
+        f"| {timestamp} | {plugin_version} | {safe_claude} | {git_sha} | "
+        f"{rate_pct} | {per_str} |"
+    )
+    csv_row = (
+        f"{timestamp},{plugin_version},{safe_claude},{git_sha},"
+        f"{rate_pct},{per_str}"
+    )
+    return md_row, csv_row
+
+
+def _append_index(path: Path, row: str, kind: str) -> None:
+    """`path` に 1 行 append。存在しなければ heading 付きで新規作成 (kind: 'md' or 'csv').
+
+    plan §5.3 / Test Coverage: 入力に末尾改行を必ず付与し、複数 append でも行が崩れない。
+    """
+    path.parent.mkdir(parents=True, exist_ok=True)
+    if not path.exists():
+        heading = INDEX_MD_HEADING if kind == "md" else INDEX_CSV_HEADING
+        path.write_text(heading, encoding="utf-8")
+    with path.open("a", encoding="utf-8") as f:
+        f.write(row + "\n")
+
+
 def _format_example(result: Dict[str, Any]) -> str:
     if result["verdict"] == "error":
         meta = result.get("meta", {})
@@ -326,6 +419,16 @@ def main(argv: Optional[List[str]] = None) -> int:
     parser.add_argument("--model", default="(claude-code default)")
     parser.add_argument("--n", type=int, default=0,
                         help="trials per scenario (used in header only)")
+    parser.add_argument("--plugin-version", default="(unknown)",
+                        help="value from .claude-plugin/plugin.json (printed in header)")
+    parser.add_argument("--git-sha", default="(unknown)",
+                        help="short git SHA (printed in header / index)")
+    parser.add_argument("--git-branch", default="(unknown)",
+                        help="git branch name (printed in header)")
+    parser.add_argument("--index-md",
+                        help="if set, append 1 row to this index.md (created with heading if missing)")
+    parser.add_argument("--index-csv",
+                        help="if set, append 1 row to this index.csv (created with header if missing)")
     args = parser.parse_args(argv)
 
     try:
@@ -352,11 +455,34 @@ def main(argv: Optional[List[str]] = None) -> int:
         n=n,
         timestamp=timestamp,
         model=args.model,
+        plugin_version=args.plugin_version,
+        git_sha=args.git_sha,
+        git_branch=args.git_branch,
     )
     out = Path(args.out)
     out.parent.mkdir(parents=True, exist_ok=True)
     out.write_text(md, encoding="utf-8")
     print(f"summary written: {out}")
+
+    # ---------- index.md / index.csv 追記 ----------
+    if args.index_md or args.index_csv:
+        # results dir 名 (timestamp 風) を index 行の timestamp として使う
+        results_dirname = Path(args.results_dir).name
+        overall = _overall_rate(results)
+        per = _per_scenario_rates(results, scenarios)
+        md_row, csv_row = render_index_row(
+            timestamp=results_dirname,
+            plugin_version=args.plugin_version,
+            claude_version=args.claude_version,
+            git_sha=args.git_sha,
+            overall_rate=overall,
+            per_scenario=per,
+        )
+        if args.index_md:
+            _append_index(Path(args.index_md), md_row, kind="md")
+        if args.index_csv:
+            _append_index(Path(args.index_csv), csv_row, kind="csv")
+
     return 0
 
 

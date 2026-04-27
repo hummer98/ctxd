@@ -34,6 +34,12 @@ done
 # ---------- claude version (m2 反映) ----------
 CLAUDE_VERSION="$(claude --version 2>&1 | head -1 || true)"
 
+# ---------- plugin version + git meta (T014) ----------
+# `.claude-plugin/plugin.json` の version を真のソースとして読み出す (fail-fast).
+PLUGIN_VERSION="$(python3 "$REPO_ROOT/evals/lib/read_plugin_version.py" "$REPO_ROOT")"
+GIT_SHA="$(git -C "$REPO_ROOT" rev-parse --short=7 HEAD 2>/dev/null || echo unknown)"
+GIT_BRANCH="$(git -C "$REPO_ROOT" rev-parse --abbrev-ref HEAD 2>/dev/null || echo unknown)"
+
 # ---------- helpers ----------
 # shellcheck source=lib/encode_path.sh
 source "$REPO_ROOT/evals/lib/encode_path.sh"
@@ -48,7 +54,9 @@ summarize.load_scenarios('$SCENARIOS')
 "
 
 # ---------- 一時 plugin の整備 ----------
-ensure_eval_plugin "$PLUGIN_DIR" "$SKILL_MD"
+# T014: 真のソースの version を ensure_eval_plugin に渡し、heredoc を経由して
+# `evals/.eval-plugin/.claude-plugin/plugin.json` の version を再生成する.
+ensure_eval_plugin "$PLUGIN_DIR" "$SKILL_MD" "$PLUGIN_VERSION"
 # 構文確認 (失敗しても warning に留める。fallback への移行は手動判断)
 if claude plugin validate "$PLUGIN_DIR" >/dev/null 2>&1; then
   echo "run.sh: plugin manifest validated"
@@ -104,7 +112,11 @@ run_one() {
   fi
 
   # ---------- prompt 投入 (raw 送信 + 別途 enter, M3) ----------
-  printf '%s' "$prompt" | cmux send --workspace "$WS"
+  # 注: `cmux send` は stdin を読まない。プロンプトは引数として渡す必要あり (T013 で発覚)。
+  # `--` 以降は raw 文字列として扱われる (cmux send --help 参照)。
+  # 現状 scenarios の prompt は単純な日本語文字列のみ (改行/二重引用符なし)。
+  # 改行を含める必要が出たら lib helper 経由で再検討する (plan §6.1)。
+  cmux send --workspace "$WS" -- "$prompt"
   cmux send-key --workspace "$WS" enter
 
   # ---------- 完了 polling ----------
@@ -143,12 +155,20 @@ while IFS= read -r line; do
   done
 done < "$SCENARIOS"
 
-# ---------- 集計 (m2: --claude-version) ----------
+# ---------- 集計 (m2: --claude-version, T014: meta + index) ----------
+# S3: 同一の summarize.py 呼び出しに `--plugin-version` / `--git-sha` /
+# `--git-branch` / `--index-md` / `--index-csv` を追加する (1 回の invocation で
+# summary.md の生成と index.{md,csv} への append を済ませる).
 python3 "$REPO_ROOT/evals/summarize.py" \
   --results-dir    "$RESULTS_DIR" \
   --scenarios      "$SCENARIOS" \
   --claude-version "$CLAUDE_VERSION" \
+  --plugin-version "$PLUGIN_VERSION" \
+  --git-sha        "$GIT_SHA" \
+  --git-branch     "$GIT_BRANCH" \
   --n              "$N" \
-  --out            "$RESULTS_DIR/summary.md"
+  --out            "$RESULTS_DIR/summary.md" \
+  --index-md       "$REPO_ROOT/evals/results/index.md" \
+  --index-csv      "$REPO_ROOT/evals/results/index.csv"
 
 echo "done: $RESULTS_DIR/summary.md"

@@ -5,7 +5,6 @@ license: Apache-2.0
 metadata:
   project: ctxd
   source: https://github.com/hummer98/ctxd
-  version: "0.1.0-draft"
 ---
 
 ## When to use ctxd

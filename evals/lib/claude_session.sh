@@ -8,9 +8,13 @@
 # 既存があっても `ln -snf` で symlink を強制再作成し、worktree 切り替えや
 # SKILL.md 編集が即時反映されるようにする (plan §3 / m6).
 #
-# Usage: ensure_eval_plugin <plugin-dir> <skill-md-path>
+# Usage: ensure_eval_plugin <plugin-dir> <skill-md-path> <plugin-version>
+#
+# 注: name は eval 専用に "ctxd-eval"。真のソース (.claude-plugin/plugin.json) の
+# "ctxd" と意図的に分離する (plugin loader 衝突回避、Q2 reviewer note 参照).
+# version のみ真のソースから動的書き換えされる。
 ensure_eval_plugin() {
-  local plugin_dir="$1" skill_md="$2"
+  local plugin_dir="$1" skill_md="$2" plugin_version="$3"
   local meta_dir="$plugin_dir/.claude-plugin"
   local manifest="$meta_dir/plugin.json"
   local skills_dir="$plugin_dir/skills/ctxd"
@@ -18,12 +22,13 @@ ensure_eval_plugin() {
 
   mkdir -p "$meta_dir" "$skills_dir"
 
-  # 最小推定スキーマ (plan §10.2)
+  # heredoc は非クォート (`<<JSON`) で `${plugin_version}` を展開させる (S2 reviewer note).
+  # `${plugin_version}` は呼び出し側で .claude-plugin/plugin.json から読み出した値.
   local desired
-  desired=$(cat <<'JSON'
+  desired=$(cat <<JSON
 {
   "name": "ctxd-eval",
-  "version": "0.0.0",
+  "version": "${plugin_version}",
   "description": "Eval-only wrapper that ships skills/ctxd as a plugin so the Skills loader picks it up during evaluation.",
   "skills": ["./skills/ctxd"]
 }
