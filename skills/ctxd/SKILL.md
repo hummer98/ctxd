@@ -232,6 +232,10 @@ ctxd env-set LOG_LEVEL=debug
 
 When the user said "LOG_LEVEL=debug を環境変数にセットして、どの key が新規追加されたか教えて", the agent invoked the `update-config` skill to edit Claude Code's `settings.json`. This is wrong: `update-config` configures the Claude Code harness (hooks, permissions, settings.json) and does **not** mutate the running task's shell environment. The `diff.added` field the user asked for is what `ctxd env-set LOG_LEVEL=debug` returns. If you see "環境変数" / "env var" in a task prompt and it is not about Claude Code's own configuration, this is the skill — not `update-config`.
 
+**If you already invoked `update-config` by mistake**: stop. `update-config` will edit Claude Code's `settings.json`, which has no effect on the running task's environment. Abandon that path and call `ctxd env-set KEY=val` from `Bash` to actually set the variable. Do not try to "undo" the `update-config` invocation by editing `settings.json` again — the harness state is irrelevant; only `ctxd env-set` produces the `diff.added` / `diff.changed` envelope the task is asking for.
+
+**Rule of thumb**: if a prompt mentions "環境変数" / "env var" / "shell variable" / "export X=Y" and the variable name is **not** a Claude Code config key (e.g. `permissions`, `hooks`, `model`, `theme`), it is **always** this skill, never `update-config`. Anything that looks like a process-level environment variable (`LOG_LEVEL`, `DATABASE_URL`, `PATH`-style) is shell environment — route it to `ctxd env-set`.
+
 Expected JSON:
 
 ```json

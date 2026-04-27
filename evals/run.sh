@@ -37,6 +37,9 @@ CLAUDE_VERSION="$(claude --version 2>&1 | head -1 || true)"
 # ---------- plugin version + git meta (T014) ----------
 # `.claude-plugin/plugin.json` の version を真のソースとして読み出す (fail-fast).
 PLUGIN_VERSION="$(python3 "$REPO_ROOT/evals/lib/read_plugin_version.py" "$REPO_ROOT")"
+# T018: author も真のソースから動的取得 (派生先 eval-plugin manifest に継承する).
+PLUGIN_AUTHOR_NAME="$(python3 "$REPO_ROOT/evals/lib/read_plugin_meta.py" "$REPO_ROOT" author.name)"
+PLUGIN_AUTHOR_EMAIL="$(python3 "$REPO_ROOT/evals/lib/read_plugin_meta.py" "$REPO_ROOT" author.email)"
 GIT_SHA="$(git -C "$REPO_ROOT" rev-parse --short=7 HEAD 2>/dev/null || echo unknown)"
 GIT_BRANCH="$(git -C "$REPO_ROOT" rev-parse --abbrev-ref HEAD 2>/dev/null || echo unknown)"
 
@@ -56,7 +59,9 @@ summarize.load_scenarios('$SCENARIOS')
 # ---------- 一時 plugin の整備 ----------
 # T014: 真のソースの version を ensure_eval_plugin に渡し、heredoc を経由して
 # `evals/.eval-plugin/.claude-plugin/plugin.json` の version を再生成する.
-ensure_eval_plugin "$PLUGIN_DIR" "$SKILL_MD" "$PLUGIN_VERSION"
+# T018: author も真のソースから継承して書き換え (warning 0 維持).
+ensure_eval_plugin "$PLUGIN_DIR" "$SKILL_MD" "$PLUGIN_VERSION" \
+  "$PLUGIN_AUTHOR_NAME" "$PLUGIN_AUTHOR_EMAIL"
 # 構文確認 (失敗しても warning に留める。fallback への移行は手動判断)
 if claude plugin validate "$PLUGIN_DIR" >/dev/null 2>&1; then
   echo "run.sh: plugin manifest validated"
@@ -80,6 +85,16 @@ run_one() {
   local tool_uses_out stop_sentinel settings_path
   id=$(jq -r '.id' <<<"$scenario_json")
   prompt=$(jq -r '.prompt' <<<"$scenario_json")
+  # T018: scenarios の任意 setup フィールドを worktree (cwd = REPO_ROOT) で実行する.
+  # cmux workspace は REPO_ROOT の同じ git repo (同 worktree) を共有するため、
+  # 親で作ったブランチは workspace 内からも見える. 失敗しても trial は続行.
+  local setup
+  setup=$(jq -r '.setup // empty' <<<"$scenario_json")
+  if [[ -n "$setup" ]]; then
+    if ! ( cd "$REPO_ROOT" && bash -c "$setup" ); then
+      echo "[$id #$2] WARN setup failed: $setup" >&2
+    fi
+  fi
   session_id=$(uuidgen | tr 'A-Z' 'a-z')
   started_at=$(date -u +%FT%TZ)
   out_jsonl="$RESULTS_DIR/session-$id-$trial.jsonl"

@@ -8,13 +8,18 @@
 # 既存があっても `ln -snf` で symlink を強制再作成し、worktree 切り替えや
 # SKILL.md 編集が即時反映されるようにする (plan §3 / m6).
 #
-# Usage: ensure_eval_plugin <plugin-dir> <skill-md-path> <plugin-version>
+# Usage: ensure_eval_plugin <plugin-dir> <skill-md-path> <plugin-version> \
+#                            <plugin-author-name> <plugin-author-email>
 #
 # 注: name は eval 専用に "ctxd-eval"。真のソース (.claude-plugin/plugin.json) の
 # "ctxd" と意図的に分離する (plugin loader 衝突回避、Q2 reviewer note 参照).
-# version のみ真のソースから動的書き換えされる。
+# version / author は真のソースから動的書き換えされる (T018: author 追加).
+# author 引数が空文字の場合は author フィールドを書き出さない (eval-plugin が独立で
+# warning 0 を維持できるよう、呼び出し側で .claude-plugin/plugin.json に author を
+# 入れるのが前提だが、欠損時 fallback として暗黙の `author: ""` を吐かない).
 ensure_eval_plugin() {
   local plugin_dir="$1" skill_md="$2" plugin_version="$3"
+  local plugin_author_name="${4:-}" plugin_author_email="${5:-}"
   local meta_dir="$plugin_dir/.claude-plugin"
   local manifest="$meta_dir/plugin.json"
   local skills_dir="$plugin_dir/skills/ctxd"
@@ -25,7 +30,22 @@ ensure_eval_plugin() {
   # heredoc は非クォート (`<<JSON`) で `${plugin_version}` を展開させる (S2 reviewer note).
   # `${plugin_version}` は呼び出し側で .claude-plugin/plugin.json から読み出した値.
   local desired
-  desired=$(cat <<JSON
+  if [[ -n "$plugin_author_name" || -n "$plugin_author_email" ]]; then
+    desired=$(cat <<JSON
+{
+  "name": "ctxd-eval",
+  "version": "${plugin_version}",
+  "description": "Eval-only wrapper that ships skills/ctxd as a plugin so the Skills loader picks it up during evaluation.",
+  "author": {
+    "name": "${plugin_author_name}",
+    "email": "${plugin_author_email}"
+  },
+  "skills": ["./skills/ctxd"]
+}
+JSON
+)
+  else
+    desired=$(cat <<JSON
 {
   "name": "ctxd-eval",
   "version": "${plugin_version}",
@@ -34,6 +54,7 @@ ensure_eval_plugin() {
 }
 JSON
 )
+  fi
   if [[ ! -f "$manifest" ]] || [[ "$(cat "$manifest")" != "$desired" ]]; then
     printf '%s\n' "$desired" > "$manifest"
   fi

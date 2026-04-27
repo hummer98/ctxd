@@ -151,6 +151,202 @@ class TestMatchModeFirst(unittest.TestCase):
         self.assertEqual(summarize.match(scen, tool_uses, exit_status="ok"), "pass")
 
 
+class TestMatchModeAnyMatch(unittest.TestCase):
+    """T018: match_mode=any-match は Bash 直接 ctxd OR Skill ctxd-eval:ctxd で pass.
+
+    plan §1.1 採用案セマンティクス:
+    - Bash 経路: name == "Bash" かつ input.command が pattern hit
+    - Skill 経路: name == "Skill" かつ input.skill == "ctxd-eval:ctxd"
+      (args の中身は問わない — Skill loader が ctxd-eval を選んだ時点で
+       shell mutation を ctxd 経路に乗せる責務を負ったとみなす)
+    """
+
+    def setUp(self):
+        self.scenario = {
+            "id": "chdir-01",
+            "expected_tool": "Bash",
+            "expected_args_pattern": r"ctxd\s+chdir\s+/tmp",
+            "match_mode": "any-match",
+        }
+
+    def test_pass_when_bash_with_ctxd(self):
+        """既存 any と同等の Bash 経路 pass."""
+        tool_uses = [{"name": "Bash", "input": {"command": "ctxd chdir /tmp"}}]
+        self.assertEqual(
+            summarize.match(self.scenario, tool_uses, exit_status="ok"), "pass"
+        )
+
+    def test_pass_when_skill_ctxd_eval_only(self):
+        """Skill 単独 (Bash で ctxd 未到達) でも pass."""
+        tool_uses = [
+            {"name": "Skill", "input": {"skill": "ctxd-eval:ctxd", "args": "cd /tmp"}},
+            {"name": "Bash", "input": {"command": "ls /tmp"}},
+        ]
+        self.assertEqual(
+            summarize.match(self.scenario, tool_uses, exit_status="ok"), "pass"
+        )
+
+    def test_fail_when_skill_other_than_ctxd_eval(self):
+        """Skill skill='update-config' は pass にしない."""
+        tool_uses = [
+            {"name": "Skill", "input": {"skill": "update-config", "args": "..."}},
+            {"name": "Bash", "input": {"command": "echo hi"}},
+        ]
+        self.assertEqual(
+            summarize.match(self.scenario, tool_uses, exit_status="ok"), "fail"
+        )
+
+    def test_fail_when_no_ctxd_anywhere(self):
+        """Bash も Skill も ctxd 経由でない場合 fail."""
+        tool_uses = [
+            {"name": "Read", "input": {"file_path": "/etc/hosts"}},
+            {"name": "Bash", "input": {"command": "cd /tmp && ls"}},
+        ]
+        self.assertEqual(
+            summarize.match(self.scenario, tool_uses, exit_status="ok"), "fail"
+        )
+
+    def test_pass_when_bash_after_ctxd_invoke(self):
+        """ctxd 呼出の後に補助 Bash (例: ls /tmp) が来ても pass (補助呼出許容)."""
+        tool_uses = [
+            {"name": "Bash", "input": {"command": "ctxd chdir /tmp"}},
+            {"name": "Bash", "input": {"command": "ls /tmp"}},
+        ]
+        self.assertEqual(
+            summarize.match(self.scenario, tool_uses, exit_status="ok"), "pass"
+        )
+
+    def test_pass_via_skill_chain_fixture(self):
+        """T017 で観察された Skill→Bash 連鎖 trial 形の fixture で pass 判定."""
+        path = FIXTURES / "sample-tools-skill-chain.jsonl"
+        tool_uses = summarize.extract_tool_uses(
+            jsonl_path=FIXTURES / "does-not-exist.jsonl",
+            hook_path=path,
+        )
+        self.assertEqual(
+            summarize.match(self.scenario, tool_uses, exit_status="ok"), "pass"
+        )
+
+    def test_existing_any_unchanged_for_skill_only(self):
+        """既存 'any' mode は Skill 単独では pass にならない (後方互換性確認)."""
+        scen = dict(self.scenario, match_mode="any")
+        tool_uses = [
+            {"name": "Skill", "input": {"skill": "ctxd-eval:ctxd", "args": "cd /tmp"}},
+        ]
+        # any mode は expected_tool=Bash 限定走査なので Skill 単独では fail
+        self.assertEqual(summarize.match(scen, tool_uses, exit_status="ok"), "fail")
+
+
+class TestLoadScenariosSetupField(unittest.TestCase):
+    """T018: scenarios の任意 setup フィールド (str / 不在 / 非 string で fail)."""
+
+    def _write(self, content: str) -> str:
+        f = tempfile.NamedTemporaryFile(
+            mode="w", suffix=".jsonl", delete=False, encoding="utf-8"
+        )
+        f.write(content)
+        f.close()
+        self.addCleanup(os.unlink, f.name)
+        return f.name
+
+    def test_setup_string_accepted(self):
+        path = self._write(
+            json.dumps(
+                {
+                    "id": "x",
+                    "prompt": "p",
+                    "expected_tool": "Bash",
+                    "expected_args_pattern": r"ctxd",
+                    "setup": "git branch feature-eval origin/main 2>/dev/null || true",
+                }
+            )
+            + "\n"
+        )
+        scenarios = summarize.load_scenarios(path)
+        self.assertEqual(len(scenarios), 1)
+        self.assertIn("git branch feature-eval", scenarios[0].get("setup", ""))
+
+    def test_setup_absent_accepted(self):
+        """setup 不在は default 動作 (実行しない) — load 自体は成功する."""
+        path = self._write(
+            json.dumps(
+                {
+                    "id": "x",
+                    "prompt": "p",
+                    "expected_tool": "Bash",
+                    "expected_args_pattern": r"ctxd",
+                }
+            )
+            + "\n"
+        )
+        scenarios = summarize.load_scenarios(path)
+        self.assertEqual(len(scenarios), 1)
+        # setup が空の場合は key 自体が無い or 空文字
+        self.assertFalse(scenarios[0].get("setup"))
+
+    def test_setup_non_string_rejected(self):
+        path = self._write(
+            json.dumps(
+                {
+                    "id": "x",
+                    "prompt": "p",
+                    "expected_tool": "Bash",
+                    "expected_args_pattern": r"ctxd",
+                    "setup": 123,
+                }
+            )
+            + "\n"
+        )
+        with self.assertRaises((SystemExit, ValueError)):
+            summarize.load_scenarios(path)
+
+
+class TestLoadScenariosAnyMatchAccepted(unittest.TestCase):
+    """T018: load_scenarios が match_mode='any-match' を受理する."""
+
+    def _write(self, content: str) -> str:
+        f = tempfile.NamedTemporaryFile(
+            mode="w", suffix=".jsonl", delete=False, encoding="utf-8"
+        )
+        f.write(content)
+        f.close()
+        self.addCleanup(os.unlink, f.name)
+        return f.name
+
+    def test_any_match_accepted(self):
+        path = self._write(
+            json.dumps(
+                {
+                    "id": "x",
+                    "prompt": "p",
+                    "expected_tool": "Bash",
+                    "expected_args_pattern": r"ctxd\s+chdir",
+                    "match_mode": "any-match",
+                }
+            )
+            + "\n"
+        )
+        scenarios = summarize.load_scenarios(path)
+        self.assertEqual(len(scenarios), 1)
+        self.assertEqual(scenarios[0]["match_mode"], "any-match")
+
+    def test_unknown_match_mode_still_rejected(self):
+        path = self._write(
+            json.dumps(
+                {
+                    "id": "x",
+                    "prompt": "p",
+                    "expected_tool": "Bash",
+                    "expected_args_pattern": r"ctxd\s+chdir",
+                    "match_mode": "bogus",
+                }
+            )
+            + "\n"
+        )
+        with self.assertRaises((SystemExit, ValueError)):
+            summarize.load_scenarios(path)
+
+
 class TestAggregate(unittest.TestCase):
     """T4: 集計結果が summary.md に必要な情報を含むこと."""
 

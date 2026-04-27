@@ -124,7 +124,14 @@ def match(
     tool_uses: List[Dict[str, Any]],
     exit_status: str,
 ) -> str:
-    """plan §6.3 の判定規則. 戻り値: "pass" | "fail" | "error"."""
+    """plan §6.3 の判定規則. 戻り値: "pass" | "fail" | "error".
+
+    match_mode = "any-match" (T018):
+    Bash 経路 (`name == "Bash"` かつ command が pattern hit) または
+    Skill 経路 (`name == "Skill"` かつ `input.skill == "ctxd-eval:ctxd"`) のいずれかが
+    1 件でも tool_uses に含まれれば pass。Skill loader が ctxd-eval を選んだ時点で
+    shell mutation を ctxd 経路に乗せる責務を負ったとみなし、args の細部は問わない。
+    """
     if exit_status in ERROR_EXIT_STATUSES:
         return "error"
     if exit_status != "ok":
@@ -134,6 +141,17 @@ def match(
     pattern = re.compile(scenario["expected_args_pattern"])
     expected_tool = scenario["expected_tool"]
     mode = scenario.get("match_mode", "any")
+    if mode == "any-match":
+        for t in tool_uses:
+            name = t.get("name")
+            inp = t.get("input") or {}
+            if name == "Skill" and inp.get("skill") == "ctxd-eval:ctxd":
+                return "pass"
+            if name == "Bash":
+                cmd = inp.get("command")
+                if cmd and pattern.search(cmd):
+                    return "pass"
+        return "fail"
     targets = tool_uses[:1] if mode == "first" else tool_uses
     for t in targets:
         if t.get("name") != expected_tool:
@@ -188,9 +206,9 @@ def load_scenarios(path: Path | str) -> List[Dict[str, Any]]:
                 )
             seen_ids[sid] = lineno
             mode = obj.get("match_mode", "any")
-            if mode not in ("any", "first"):
+            if mode not in ("any", "first", "any-match"):
                 raise ValueError(
-                    f"line {lineno}: match_mode must be 'any' or 'first', got '{mode}'"
+                    f"line {lineno}: match_mode must be 'any', 'first', or 'any-match', got '{mode}'"
                 )
             try:
                 re.compile(obj["expected_args_pattern"])
@@ -198,6 +216,12 @@ def load_scenarios(path: Path | str) -> List[Dict[str, Any]]:
                 raise ValueError(
                     f"line {lineno}: invalid expected_args_pattern regex ({e})"
                 ) from e
+            if "setup" in obj and obj["setup"] is not None:
+                if not isinstance(obj["setup"], str):
+                    raise ValueError(
+                        f"line {lineno}: setup must be a string, got "
+                        f"{type(obj['setup']).__name__}"
+                    )
             obj.setdefault("match_mode", "any")
             scenarios.append(obj)
     return scenarios

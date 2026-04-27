@@ -1,0 +1,2 @@
+{"name":"Skill","input":{"skill":"ctxd-eval:ctxd","args":"cd /tmp"},"tool_use_id":"toolu_skill_01","ts":"2026-04-27T16:01:00Z"}
+{"name":"Bash","input":{"command":"ls /tmp","description":"list /tmp contents"},"tool_use_id":"toolu_bash_01","ts":"2026-04-27T16:01:01Z"}

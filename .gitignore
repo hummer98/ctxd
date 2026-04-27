@@ -5,6 +5,8 @@
 
 # Build artifacts
 /ctxd
+# eval scenarios で agent が `go build -o bin/ctxd` を打つことがあるため除外 (T018)
+/bin/
 
 # Eval harness (regenerated on each run)
 evals/.eval-plugin/
