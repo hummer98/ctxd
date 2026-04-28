@@ -330,6 +330,7 @@ Cost / time budget: each trial spends a few model cents. Default `EVAL_N=3` × 5
 
 How often the agent reaches for `ctxd` when the SKILL says it should, across plugin versions.
 The figures below come from the `evals/run.sh` harness — per-scenario breakdown below.
+All runs to date used **`claude-opus-4-7`** (resolved from claude-code's default at the time the runs were taken).
 
 | plugin version | N | trials | overall | chdir | git-switch | env-set | notes |
 |---|---:|---:|---:|---:|---:|---:|---|

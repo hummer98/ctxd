@@ -314,6 +314,7 @@ plugin version は `.claude-plugin/plugin.json` の `version` を真のソース
 
 SKILL.md が指示する場面で agent が `ctxd` に手を伸ばす割合を、plugin version ごとに比較したものです。
 数値は `evals/run.sh` harness の出力です。コマンド系列ごとの内訳も併記しています。
+ここまでのすべての run は **`claude-opus-4-7`** モデルで計測しています（計測時点での claude-code の default が解決した値）。
 
 | plugin version | N | trials | overall | chdir | git-switch | env-set | notes |
 |---|---:|---:|---:|---:|---:|---:|---|

@@ -5,7 +5,7 @@
 - git SHA: 7a95621
 - git branch: task-014-1777261475/task
 - claude version: 2.1.119 (Claude Code)
-- model: (claude-code default)
+- model: claude-opus-4-7
 - N (trials per scenario): 3
 - total trials: 15
 - overall success rate: 0 / 15 (0.0%)
