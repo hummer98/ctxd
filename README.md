@@ -300,6 +300,8 @@ See [`docs/adr/`](docs/adr/) for design decisions (CLI framework selection etc.)
 bash evals/run.sh
 # or override the per-scenario trial count
 EVAL_N=1 bash evals/run.sh
+# or pin a different model (default: claude-opus-4-7)
+EVAL_MODEL=claude-sonnet-4-5 bash evals/run.sh
 ```
 
 Each trial spins up `claude --settings <per-trial>.json` so a `Stop` hook
@@ -316,13 +318,13 @@ Outputs land in `evals/results/<UTC-timestamp>/`:
 - `session-<id>-<trial>.tools.jsonl` — PostToolUse hook output, one tool_use per line (git-ignored)
 - `session-<id>-<trial>.done` — Stop hook sentinel marking session completion (git-ignored)
 - `session-<id>-<trial>.settings.json` — per-trial `claude --settings` payload wiring the hooks (git-ignored)
-- `summary.md` — overall and per-scenario success rate, plus the first failing tool_use quoted for context. Header records `plugin version`, `git SHA`, `git branch`, and `claude version` so each run is uniquely traceable.
+- `summary.md` — overall and per-scenario success rate, plus the first failing tool_use quoted for context. Header records `plugin version`, `git SHA`, `git branch`, `claude version`, and `model` so each run is uniquely traceable.
 
 Cross-run trend lives in `evals/results/index.md` and `evals/results/index.csv` (one row per run). Both are committed; the heavy JSONL / meta files are not — re-running the harness regenerates them.
 
 The plugin version comes from `.claude-plugin/plugin.json` and acts as the canonical unit for comparing measurements. See [`CLAUDE.md`](CLAUDE.md) for the bump policy when SKILL.md changes.
 
-Cost / time budget: each trial spends a few model cents. Default `EVAL_N=3` × 5 scenarios ≈ a handful of dimes to ~$1 and 5–10 minutes wall-clock, depending on the model claude-code resolves to. See [`evals/scenarios.jsonl`](evals/scenarios.jsonl) for the prompts and expected patterns.
+Cost / time budget: each trial spends a few model cents. Default `EVAL_N=3` × 5 scenarios ≈ a handful of dimes to ~$1 and 5–10 minutes wall-clock for `EVAL_MODEL=claude-opus-4-7` (default). Switching to a faster / cheaper model via `EVAL_MODEL` shifts both axes. See [`evals/scenarios.jsonl`](evals/scenarios.jsonl) for the prompts and expected patterns.
 
 `evals/.eval-plugin/` (plugin shim that wires `skills/ctxd` into the Skills loader) is git-ignored — the harness regenerates the shim on every run, dynamically writing the `version` from `.claude-plugin/plugin.json`.
 
@@ -330,17 +332,17 @@ Cost / time budget: each trial spends a few model cents. Default `EVAL_N=3` × 5
 
 How often the agent reaches for `ctxd` when the SKILL says it should, across plugin versions.
 The figures below come from the `evals/run.sh` harness — per-scenario breakdown below.
-All runs to date used **`claude-opus-4-7`** (resolved from claude-code's default at the time the runs were taken).
 
-| plugin version | N | trials | overall | chdir | git-switch | env-set | notes |
-|---|---:|---:|---:|---:|---:|---:|---|
-| 0.1.0 | 3 | 15 | 0.0% | 0/6 | 0/6 | 0/3 | Initial baseline; hook-based harness landed (T013–T015) |
-| 0.1.1 | 3 | 15 | 6.7% | 0/6 | 0/6 | 1/3 | SKILL.md trigger reinforced (description, ❌→✅ examples) (T016) |
-| 0.1.2 | 3 | 15 | 53.3% | 5/6 | 1/6 | 2/3 | disambiguation + NEVER phrasing + Precondition section (T017) |
-| 0.1.3 | 3 | 15 | 100.0% | 6/6 | 6/6 | 3/3 | pattern matcher tightened + scenario setup hooks + plugin author (T018) |
-| 0.1.3 | 10 | 50 | 98.0% | 20/20 | 19/20 | 10/10 | Variance check at N=10 (T019) |
+| model | plugin version | N | trials | overall | chdir | git-switch | env-set | notes |
+|---|---|---:|---:|---:|---:|---:|---:|---|
+| claude-opus-4-7 | 0.1.0 | 3 | 15 | 0.0% | 0/6 | 0/6 | 0/3 | Initial baseline; hook-based harness landed (T013–T015) |
+| claude-opus-4-7 | 0.1.1 | 3 | 15 | 6.7% | 0/6 | 0/6 | 1/3 | SKILL.md trigger reinforced (description, ❌→✅ examples) (T016) |
+| claude-opus-4-7 | 0.1.2 | 3 | 15 | 53.3% | 5/6 | 1/6 | 2/3 | disambiguation + NEVER phrasing + Precondition section (T017) |
+| claude-opus-4-7 | 0.1.3 | 3 | 15 | 100.0% | 6/6 | 6/6 | 3/3 | pattern matcher tightened + scenario setup hooks + plugin author (T018) |
+| claude-opus-4-7 | 0.1.3 | 10 | 50 | 98.0% | 20/20 | 19/20 | 10/10 | Variance check at N=10 (T019) |
 
 `N` is trials per scenario; `trials` is N × 5 scenarios. Each cell shows passes / trials for that command family.
+Model is part of the run identity — switching to a different `EVAL_MODEL` (e.g. `claude-sonnet-4-5`) requires re-running the baseline; rows are not directly comparable across models.
 The latest baseline lives in [`evals/results/index.md`](evals/results/index.md) — the table here is updated by hand, see [`CLAUDE.md`](CLAUDE.md).
 
 ---

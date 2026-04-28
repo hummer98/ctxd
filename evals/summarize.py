@@ -284,7 +284,7 @@ def render_summary(
     claude_version: str,
     n: int,
     timestamp: str,
-    model: str = "(claude-code default)",
+    model: str = "(unknown)",
     plugin_version: str = "(unknown)",
     git_sha: str = "(unknown)",
     git_branch: str = "(unknown)",
@@ -362,11 +362,11 @@ def render_summary(
 INDEX_MD_HEADING = (
     "# Eval Index\n"
     "\n"
-    "| timestamp | plugin_version | claude_version | git_sha | overall_rate | per_scenario_rates |\n"
-    "|---|---|---|---|---|---|\n"
+    "| timestamp | model | plugin_version | claude_version | git_sha | overall_rate | per_scenario_rates |\n"
+    "| --- | --- | --- | --- | --- | --- | --- |\n"
 )
 INDEX_CSV_HEADING = (
-    "timestamp,plugin_version,claude_version,git_sha,overall_rate,per_scenario_rates\n"
+    "timestamp,model,plugin_version,claude_version,git_sha,overall_rate,per_scenario_rates\n"
 )
 
 
@@ -411,6 +411,7 @@ def render_index_row(
     git_sha: str,
     overall_rate: float,
     per_scenario: List[tuple],
+    model: str = "(unknown)",
 ) -> tuple:
     """index.md / index.csv の 1 行をそれぞれ返す (`md_row`, `csv_row`).
 
@@ -418,16 +419,19 @@ def render_index_row(
     - overall_rate は `66.7%` 形式 (小数 1 桁、`%` 付き)
     - per_scenario_rates は `<id>:<rate>` を `;` 区切り、CSV 同居のため `,` 不在
     - claude_version の `,` は `;` に置換 (CSV 安全化)
+    - model 列は T022 で追加。計測の identity に組み込まれた (default `(unknown)` は
+      引数を渡さない呼び出しの fallback でしかない).
     """
     rate_pct = f"{overall_rate * 100:.1f}%"
     per_str = ";".join(f"{sid}:{rate}" for sid, rate in per_scenario)
     safe_claude = claude_version.replace(",", ";")
+    safe_model = model.replace(",", ";")
     md_row = (
-        f"| {timestamp} | {plugin_version} | {safe_claude} | {git_sha} | "
+        f"| {timestamp} | {safe_model} | {plugin_version} | {safe_claude} | {git_sha} | "
         f"{rate_pct} | {per_str} |"
     )
     csv_row = (
-        f"{timestamp},{plugin_version},{safe_claude},{git_sha},"
+        f"{timestamp},{safe_model},{plugin_version},{safe_claude},{git_sha},"
         f"{rate_pct},{per_str}"
     )
     return md_row, csv_row
@@ -498,7 +502,8 @@ def main(argv: Optional[List[str]] = None) -> int:
     parser.add_argument("--scenarios", required=True)
     parser.add_argument("--claude-version", default="(unknown)")
     parser.add_argument("--out", required=True)
-    parser.add_argument("--model", default="(claude-code default)")
+    parser.add_argument("--model", required=True,
+                        help="model id (e.g. 'claude-opus-4-7'); part of run identity (T022)")
     parser.add_argument("--n", type=int, default=0,
                         help="trials per scenario (used in header only)")
     parser.add_argument("--plugin-version", default="(unknown)",
@@ -559,6 +564,7 @@ def main(argv: Optional[List[str]] = None) -> int:
             git_sha=args.git_sha,
             overall_rate=overall,
             per_scenario=per,
+            model=args.model,
         )
         if args.index_md:
             _append_index(Path(args.index_md), md_row, kind="md")

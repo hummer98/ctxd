@@ -289,6 +289,8 @@ CLI フレームワーク選定など、設計上の判断は [`docs/adr/`](docs
 bash evals/run.sh
 # シナリオあたりの試行回数を変える場合
 EVAL_N=1 bash evals/run.sh
+# 別モデルで計測したい場合 (default: claude-opus-4-7)
+EVAL_MODEL=claude-sonnet-4-5 bash evals/run.sh
 ```
 
 各 trial は `claude --settings <per-trial>.json` を経由して起動し、 `Stop` hook がセッション終了時に sentinel ファイルを touch、 `PostToolUse` hook が各 tool_use を `session-<id>-<trial>.tools.jsonl` に append します。runner は画面スクレイピングではなく sentinel の出現を待ち、 `summarize.py` は hook 出力 JSONL を第一優先で読み (空なら claude 本体の session JSONL に fallback) tool_use を抽出します。
@@ -300,13 +302,13 @@ EVAL_N=1 bash evals/run.sh
 - `session-<id>-<trial>.tools.jsonl` — PostToolUse hook が書く tool_use ごとの 1 行 JSONL (git 管理外)
 - `session-<id>-<trial>.done` — Stop hook が touch するセッション完了 sentinel (git 管理外)
 - `session-<id>-<trial>.settings.json` — `claude --settings` に渡す trial ごとの hook 設定 (git 管理外)
-- `summary.md` — 全体 / シナリオ別の success rate と、fail / error の最初の 1 例。ヘッダに `plugin version` / `git SHA` / `git branch` / `claude version` を併記し、各 run を一意に追跡できるようにしている。
+- `summary.md` — 全体 / シナリオ別の success rate と、fail / error の最初の 1 例。ヘッダに `plugin version` / `git SHA` / `git branch` / `claude version` / `model` を併記し、各 run を一意に追跡できるようにしている。
 
 run 横断の trend は `evals/results/index.md` と `evals/results/index.csv` (1 run = 1 行) に蓄積されます。これらの軽量メタは commit 対象、重い JSONL / meta.json は git 管理外 (再 run で再現可能)。
 
 plugin version は `.claude-plugin/plugin.json` の `version` を真のソースとし、計測比較の単位として扱います。SKILL.md を変更した際の version バンプ運用は [`CLAUDE.md`](CLAUDE.md) を参照してください。
 
-コスト/時間の目安: 1 試行あたり数 cent。既定の `EVAL_N=3` × 5 シナリオで数十 cent〜$1、5〜10 分程度 (claude-code が解決するモデル次第)。プロンプトと期待パターンは [`evals/scenarios.jsonl`](evals/scenarios.jsonl) を参照してください。
+コスト/時間の目安: 1 試行あたり数 cent。既定の `EVAL_N=3` × 5 シナリオ × `EVAL_MODEL=claude-opus-4-7` (default) で数十 cent〜$1、5〜10 分程度。`EVAL_MODEL` を別モデルに切り替えるとコスト・所要時間ともに変動します。プロンプトと期待パターンは [`evals/scenarios.jsonl`](evals/scenarios.jsonl) を参照してください。
 
 `evals/.eval-plugin/` (Skills loader に `skills/ctxd` を登録するためのシム) は git 管理外です — harness が毎回再生成し、`.claude-plugin/plugin.json` の `version` を動的に書き込みます。
 
@@ -314,17 +316,17 @@ plugin version は `.claude-plugin/plugin.json` の `version` を真のソース
 
 SKILL.md が指示する場面で agent が `ctxd` に手を伸ばす割合を、plugin version ごとに比較したものです。
 数値は `evals/run.sh` harness の出力です。コマンド系列ごとの内訳も併記しています。
-ここまでのすべての run は **`claude-opus-4-7`** モデルで計測しています（計測時点での claude-code の default が解決した値）。
 
-| plugin version | N | trials | overall | chdir | git-switch | env-set | notes |
-|---|---:|---:|---:|---:|---:|---:|---|
-| 0.1.0 | 3 | 15 | 0.0% | 0/6 | 0/6 | 0/3 | 初期 baseline / hook-based harness 整備 (T013-T015) |
-| 0.1.1 | 3 | 15 | 6.7% | 0/6 | 0/6 | 1/3 | SKILL.md trigger 強化 (description / ❌→✅ 例) (T016) |
-| 0.1.2 | 3 | 15 | 53.3% | 5/6 | 1/6 | 2/3 | disambiguation + NEVER 表現 + Precondition 章追加 (T017) |
-| 0.1.3 | 3 | 15 | 100.0% | 6/6 | 6/6 | 3/3 | pattern matcher 改良 + scenario setup hook + author 追加 (T018) |
-| 0.1.3 | 10 | 50 | 98.0% | 20/20 | 19/20 | 10/10 | N=10 揺らぎ調査 (T019) |
+| model | plugin version | N | trials | overall | chdir | git-switch | env-set | notes |
+|---|---|---:|---:|---:|---:|---:|---:|---|
+| claude-opus-4-7 | 0.1.0 | 3 | 15 | 0.0% | 0/6 | 0/6 | 0/3 | 初期 baseline / hook-based harness 整備 (T013-T015) |
+| claude-opus-4-7 | 0.1.1 | 3 | 15 | 6.7% | 0/6 | 0/6 | 1/3 | SKILL.md trigger 強化 (description / ❌→✅ 例) (T016) |
+| claude-opus-4-7 | 0.1.2 | 3 | 15 | 53.3% | 5/6 | 1/6 | 2/3 | disambiguation + NEVER 表現 + Precondition 章追加 (T017) |
+| claude-opus-4-7 | 0.1.3 | 3 | 15 | 100.0% | 6/6 | 6/6 | 3/3 | pattern matcher 改良 + scenario setup hook + author 追加 (T018) |
+| claude-opus-4-7 | 0.1.3 | 10 | 50 | 98.0% | 20/20 | 19/20 | 10/10 | N=10 揺らぎ調査 (T019) |
 
 `N` は scenario あたりの試行回数、`trials` は N × 5 scenarios。各セルは pass / trials を示します。
+model は run の identity の一部なので、別 model (例: `EVAL_MODEL=claude-sonnet-4-5`) で計測したい場合は baseline を取り直す必要があり、別 model 同士の行は直接比較できません。
 最新の baseline は [`evals/results/index.md`](evals/results/index.md) を参照してください。本表の更新運用は [`CLAUDE.md`](CLAUDE.md) を参照。
 
 ---

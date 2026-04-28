@@ -488,6 +488,7 @@ class TestRenderIndexRow(unittest.TestCase):
                 ("git-switch-02", 0.33),
                 ("env-set-01", 0.67),
             ],
+            model="claude-opus-4-7",
         )
         # md: pipe-separated row (no leading heading)
         self.assertIn("20260427-120130", md_row)
@@ -495,6 +496,9 @@ class TestRenderIndexRow(unittest.TestCase):
         self.assertIn("2.1.119 (Claude Code)", md_row)
         self.assertIn("7a95621", md_row)
         self.assertIn("73.3%", md_row)
+        # T022: model 列が 2 番目 (timestamp の直後) に入る
+        self.assertIn("claude-opus-4-7", md_row)
+        self.assertLess(md_row.find("claude-opus-4-7"), md_row.find("0.1.0"))
         # per_scenario_rates は `;` 区切り、`,` を含めない
         self.assertIn("chdir-01:1.0", md_row)
         self.assertIn("chdir-02:0.67", md_row)
@@ -502,9 +506,10 @@ class TestRenderIndexRow(unittest.TestCase):
         # csv 行は `,` 区切り、フィールド内に `,` を含めない
         self.assertIn("20260427-120130", csv_row)
         self.assertIn("73.3%", csv_row)
-        # csv の per_scenario_rates フィールドが `;` 区切り
-        # 各 csv field は `,` で 6 列
-        self.assertEqual(csv_row.count(","), 5)
+        self.assertIn("claude-opus-4-7", csv_row)
+        # T022: csv は 7 列 (timestamp,model,plugin_version,claude_version,git_sha,
+        # overall_rate,per_scenario_rates) なので `,` は 6 個
+        self.assertEqual(csv_row.count(","), 6)
 
     def test_per_scenario_rates_preserve_input_order(self):
         """S1: render_index_row が per_scenario の入力順を保証する."""
@@ -625,6 +630,163 @@ class TestAppendIndex(unittest.TestCase):
             self.assertEqual(content.count("timestamp,"), 1)
             data_lines = [l for l in content.splitlines() if l.startswith("ts")]
             self.assertEqual(len(data_lines), 2)
+
+
+class TestRenderIndexRowModel(unittest.TestCase):
+    """T022: render_index_row が model 列を出力する.
+
+    列順は `timestamp | model | plugin_version | claude_version | git_sha | overall_rate
+    | per_scenario_rates` で固定 (migration 済みの既存 index.{md,csv} と同じ並び).
+    """
+
+    def test_model_column_appears_in_md_after_timestamp(self):
+        md_row, _ = summarize.render_index_row(
+            timestamp="20260428-200000",
+            plugin_version="0.1.3",
+            claude_version="2.1.121 (Claude Code)",
+            git_sha="abc1234",
+            overall_rate=1.0,
+            per_scenario=[("chdir-01", 1.0)],
+            model="claude-sonnet-4-5",
+        )
+        ts_pos = md_row.find("20260428-200000")
+        model_pos = md_row.find("claude-sonnet-4-5")
+        plugin_pos = md_row.find("0.1.3")
+        # model は timestamp の後、plugin_version の前
+        self.assertGreater(model_pos, ts_pos)
+        self.assertLess(model_pos, plugin_pos)
+
+    def test_model_column_appears_in_csv_after_timestamp(self):
+        _, csv_row = summarize.render_index_row(
+            timestamp="20260428-200000",
+            plugin_version="0.1.3",
+            claude_version="2.1.121 (Claude Code)",
+            git_sha="abc1234",
+            overall_rate=1.0,
+            per_scenario=[("chdir-01", 1.0)],
+            model="claude-sonnet-4-5",
+        )
+        # csv field 順: 0=timestamp, 1=model, 2=plugin_version, ...
+        fields = csv_row.split(",")
+        self.assertEqual(fields[0], "20260428-200000")
+        self.assertEqual(fields[1], "claude-sonnet-4-5")
+        self.assertEqual(fields[2], "0.1.3")
+
+    def test_model_default_is_unknown_placeholder(self):
+        """model 引数を渡さないと '(unknown)' が入る (テストしやすさのため default あり)."""
+        _, csv_row = summarize.render_index_row(
+            timestamp="t", plugin_version="v", claude_version="c", git_sha="s",
+            overall_rate=0.5, per_scenario=[("a", 1.0)],
+        )
+        fields = csv_row.split(",")
+        self.assertEqual(fields[1], "(unknown)")
+
+    def test_model_with_comma_escaped_to_semicolon(self):
+        """model に `,` が含まれた場合 csv 安全化 (claude_version と同じルール)."""
+        _, csv_row = summarize.render_index_row(
+            timestamp="t", plugin_version="v", claude_version="c", git_sha="s",
+            overall_rate=0.5, per_scenario=[("a", 1.0)],
+            model="claude,opus",
+        )
+        # csv 列数は 7 のまま (model 内の `,` が `;` に置換されているはず)
+        self.assertEqual(csv_row.count(","), 6)
+        self.assertIn("claude;opus", csv_row)
+
+
+class TestIndexHeadingHasModelColumn(unittest.TestCase):
+    """T022: 新規 index.{md,csv} を作るとき heading に model 列が含まれる."""
+
+    def _row(self):
+        md_row, csv_row = summarize.render_index_row(
+            timestamp="ts1", plugin_version="0.1.3", claude_version="c",
+            git_sha="s", overall_rate=1.0, per_scenario=[("a", 1.0)],
+            model="claude-opus-4-7",
+        )
+        return md_row, csv_row
+
+    def test_md_heading_includes_model(self):
+        with tempfile.TemporaryDirectory() as td:
+            p = Path(td) / "index.md"
+            md_row, _ = self._row()
+            summarize._append_index(p, md_row, kind="md")
+            content = p.read_text(encoding="utf-8")
+            heading_line = next(
+                (l for l in content.splitlines() if l.startswith("| timestamp")),
+                "",
+            )
+            self.assertIn("model", heading_line)
+            # 列順: timestamp が最左、model が 2 列目
+            ts_pos = heading_line.find("timestamp")
+            model_pos = heading_line.find("model")
+            plugin_pos = heading_line.find("plugin_version")
+            self.assertGreater(model_pos, ts_pos)
+            self.assertLess(model_pos, plugin_pos)
+
+    def test_csv_heading_includes_model(self):
+        with tempfile.TemporaryDirectory() as td:
+            p = Path(td) / "index.csv"
+            _, csv_row = self._row()
+            summarize._append_index(p, csv_row, kind="csv")
+            content = p.read_text(encoding="utf-8")
+            heading = content.splitlines()[0]
+            fields = heading.split(",")
+            # 7 列、index 1 が model
+            self.assertEqual(len(fields), 7)
+            self.assertEqual(fields[0], "timestamp")
+            self.assertEqual(fields[1], "model")
+            self.assertEqual(fields[2], "plugin_version")
+
+    def test_csv_data_row_has_seven_fields(self):
+        """index.csv の各行が必ず 7 フィールドを持つことの保証
+
+        (model 列が抜けると csv が壊れる回帰検出用 — DoD §5)。
+        """
+        with tempfile.TemporaryDirectory() as td:
+            p = Path(td) / "index.csv"
+            _, csv_row = self._row()
+            summarize._append_index(p, csv_row, kind="csv")
+            summarize._append_index(p, csv_row, kind="csv")
+            for line in p.read_text(encoding="utf-8").splitlines():
+                self.assertEqual(line.count(","), 6, msg=f"row: {line!r}")
+
+
+class TestRenderSummaryModel(unittest.TestCase):
+    """T022: render_summary がヘッダに `model:` 行を出力する."""
+
+    def test_model_appears_in_header_when_provided(self):
+        md = summarize.render_summary(
+            results=[], scenarios=[], claude_version="x", n=0, timestamp="t",
+            model="claude-opus-4-7",
+        )
+        self.assertIn("- model: claude-opus-4-7", md)
+
+    def test_model_default_is_unknown_not_placeholder(self):
+        """default は明示的なプレースホルダー文字列ではなく '(unknown)'.
+
+        DoD §2: summary.md ヘッダの model 行はプレースホルダー禁止 — run.sh 経由
+        では必ず実値が入る。直接 render_summary() を呼ぶ unit test では default
+        '(unknown)' が許容される (他の meta フィールドと挙動を揃える)。
+        """
+        md = summarize.render_summary(
+            results=[], scenarios=[], claude_version="x", n=0, timestamp="t",
+        )
+        self.assertIn("- model: (unknown)", md)
+        # 旧 placeholder が完全に除去されていること
+        self.assertNotIn("(claude-code default)", md)
+
+
+class TestSummarizeCliRequiresModel(unittest.TestCase):
+    """T022: CLI の `--model` が required (DoD §5: 必須化 or default の挙動)."""
+
+    def test_argparse_errors_when_model_missing(self):
+        """`--model` を渡さないと argparse が SystemExit を投げる."""
+        # argparse は SystemExit(2) を投げる
+        with self.assertRaises(SystemExit):
+            summarize.main([
+                "--results-dir", "/nonexistent",
+                "--scenarios", "/nonexistent",
+                "--out", "/tmp/x.md",
+            ])
 
 
 class TestPerScenarioRatesAggregation(unittest.TestCase):

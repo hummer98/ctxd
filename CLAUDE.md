@@ -23,6 +23,18 @@
 - **派生先は手動同期しない**: `evals/.eval-plugin/.claude-plugin/plugin.json` の `version` は `evals/run.sh` の起動時に真のソース (`.claude-plugin/plugin.json`) から動的に再生成される。手動同期は不要。
 - **README の統計テーブルを更新する**: 新しい version で本走 (5 scenarios 揃いで harness 完走した run) を取ったら、`README.md` の `### Adherence over plugin versions` と `README.ja.md` の `### バージョン別 SKILL 遵守率` に 1 行追記する。採用 run の選別基準は「5 scenarios 揃い / harness-aborted でない / 同一 version 内で最新」。自動生成スクリプトは現時点で未整備なので手動運用。
 
+## モデル ID の記録 (T022)
+
+`evals/run.sh` は claude のモデル ID を `EVAL_MODEL` 環境変数 (default `claude-opus-4-7`) で受け取り、`claude --model <id>` として渡すと同時に `summary.md` ヘッダ / `evals/results/index.{md,csv}` の `model` 列に記録する。
+
+理由: 同じ `plugin.json` version でも実行モデルが違えば遵守率は別物になる。model は plugin version と並ぶ「計測の identity」の一部。
+
+### 運用ルール
+
+- **モデルを変更したら eval を必ず再計測する**。過去の baseline と直接比較するためには同一モデルで取り直すこと。
+- `EVAL_MODEL=claude-sonnet-4-5 bash evals/run.sh` のように他モデルを試すときも、index は新 run として 1 行追加されるだけで、過去 run と混ざらない (識別は `(timestamp, plugin_version, model, git_sha)` の組)。
+- `README.md` / `README.ja.md` の統計テーブルにも `model` 列があるので、新 run を追記するときは plugin version と並べて model を必ず埋めること。
+
 ## 真のソースの位置
 
 | 対象 | 真のソース |

@@ -3,6 +3,8 @@
 #
 # 実行: bash evals/run.sh
 #   EVAL_N=<n>                  シナリオあたり試行回数 (default 3)
+#   EVAL_MODEL=<id>             claude モデル ID (default claude-opus-4-7).
+#                                例: EVAL_MODEL=claude-sonnet-4-5 bash evals/run.sh
 #   RUN_TIMEOUT_SECONDS=<sec>   1 試行の応答待ち上限 (default 180)
 #
 # 必要 CLI: cmux, claude, uuidgen, jq, python3
@@ -14,6 +16,9 @@ set -euo pipefail
 # ---------- 設定 ----------
 REPO_ROOT="$(git rev-parse --show-toplevel)"
 N="${EVAL_N:-3}"
+# T022: model は計測の identity に含まれるため明示記録する。default は
+# claude-opus-4-7 (T013-T021 までの全 baseline で使われていた値)。
+EVAL_MODEL="${EVAL_MODEL:-claude-opus-4-7}"
 RUN_TIMEOUT_SECONDS="${RUN_TIMEOUT_SECONDS:-180}"
 TIMESTAMP="$(date -u +%Y%m%d-%H%M%S)"
 RESULTS_DIR="$REPO_ROOT/evals/results/$TIMESTAMP"
@@ -132,9 +137,9 @@ run_one() {
     --stop-sentinel "$stop_sentinel" \
     --out           "$settings_path" >/dev/null
 
-  # ---------- claude 起動 (M3: send は raw、enter は send-key 別途 / T015: --settings 追加) ----------
+  # ---------- claude 起動 (M3: send は raw、enter は send-key 別途 / T015: --settings 追加 / T022: --model 追加) ----------
   cmux send --workspace "$WS" \
-    "claude --session-id $session_id --plugin-dir $PLUGIN_DIR --settings $settings_path --dangerously-skip-permissions"
+    "claude --session-id $session_id --plugin-dir $PLUGIN_DIR --settings $settings_path --model $EVAL_MODEL --dangerously-skip-permissions"
   cmux send-key --workspace "$WS" enter
 
   if ! poll_for_ready "$WS" 30; then
@@ -249,6 +254,7 @@ python3 "$REPO_ROOT/evals/summarize.py" \
   --plugin-version "$PLUGIN_VERSION" \
   --git-sha        "$GIT_SHA" \
   --git-branch     "$GIT_BRANCH" \
+  --model          "$EVAL_MODEL" \
   --n              "$N" \
   --out            "$RESULTS_DIR/summary.md" \
   --index-md       "$REPO_ROOT/evals/results/index.md" \

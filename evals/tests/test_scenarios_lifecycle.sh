@@ -82,6 +82,16 @@ assert "run.sh saves original branch before setup" \
 assert "run.sh restores original branch with switch -f" \
   grep -q 'switch -f' "$RUN_SH"
 
+# ---------- 6. T022: run.sh が EVAL_MODEL を default 付きで定義し --model に伝える ----------
+# モデルを明示記録するため (1) EVAL_MODEL 環境変数で受け取る、(2) claude 起動コマンドに
+# --model $EVAL_MODEL を渡す、(3) summarize.py に --model $EVAL_MODEL を渡す。
+assert "run.sh defines EVAL_MODEL with default" \
+  grep -q 'EVAL_MODEL="\${EVAL_MODEL:-' "$RUN_SH"
+assert "run.sh passes --model to claude launch" \
+  grep -q -- '--model $EVAL_MODEL' "$RUN_SH"
+assert "run.sh passes --model to summarize.py" \
+  grep -qE -- '--model[[:space:]]+"\$EVAL_MODEL"' "$RUN_SH"
+
 if (( failed > 0 )); then
   echo "test_scenarios_lifecycle.sh: $failed FAILED" >&2
   exit 1
