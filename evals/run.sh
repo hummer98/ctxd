@@ -83,8 +83,14 @@ run_one() {
   local scenario_json="$1" trial="$2"
   local id prompt session_id started_at out_jsonl out_meta
   local tool_uses_out stop_sentinel settings_path
+  local original_branch
   id=$(jq -r '.id' <<<"$scenario_json")
   prompt=$(jq -r '.prompt' <<<"$scenario_json")
+  # T021 fix: setup の前に worktree の現在ブランチを保存する。
+  # cmux workspace 内で `ctxd git-switch <branch>` が走ると worktree HEAD が動いてしまい、
+  # その状態で teardown の `git branch -D <branch>` を呼ぶと「現在 checkout 中ブランチの削除」
+  # となり silent fail する。teardown 直前にこの保存値で switch -f して戻す。
+  original_branch=$(git -C "$REPO_ROOT" rev-parse --abbrev-ref HEAD 2>/dev/null || echo "")
   # T018: scenarios の任意 setup フィールドを worktree (cwd = REPO_ROOT) で実行する.
   # cmux workspace は REPO_ROOT の同じ git repo (同 worktree) を共有するため、
   # 親で作ったブランチは workspace 内からも見える. 失敗しても trial は続行.
@@ -171,8 +177,17 @@ run_one() {
   src="$HOME/.claude/projects/$encoded/$session_id.jsonl"
   if wait_for_jsonl "$src" 10; then
     cp "$src" "$out_jsonl"
+    # timeout 等で先に error を書いた trial を上書きしない
     if [[ ! -f "$out_meta" ]]; then
-      record_meta ok ""
+      # T021: hook 出力 + session JSONL 双方で tool_use 0 件なら tools_missing で error 化.
+      # exit 0 = missing → record_meta error "tools_missing".
+      if python3 "$REPO_ROOT/evals/lib/check_tools_missing.py" \
+          --tools-jsonl "$tool_uses_out" \
+          --session-jsonl "$out_jsonl"; then
+        record_meta error "tools_missing"
+      else
+        record_meta ok ""
+      fi
     fi
   else
     record_meta error "jsonl_missing"
@@ -184,6 +199,35 @@ run_one() {
   sleep 2
   cmux close-workspace --workspace "$WS" 2>/dev/null || true
   LAST_WS=""
+
+  # ---------- T021 fix: teardown 前に元ブランチへ復帰 ----------
+  # ctxd git-switch <branch> が worktree HEAD を動かしてしまっているため、teardown
+  # で feature-eval を `git branch -D` する前に元ブランチへ戻す必要がある (Conductor 採用案)。
+  # `switch -f` は uncommitted changes を踏み潰すが、eval harness は worktree を
+  # 共有作業ツリーとして扱う前提で動いており、各 trial で副作用は許容範囲とする。
+  # 元ブランチが取れていない / "HEAD" (detached) の場合はスキップする。
+  if [[ -n "$original_branch" && "$original_branch" != "HEAD" ]]; then
+    local current_branch
+    current_branch=$(git -C "$REPO_ROOT" rev-parse --abbrev-ref HEAD 2>/dev/null || echo "")
+    if [[ "$current_branch" != "$original_branch" ]]; then
+      if ! git -C "$REPO_ROOT" switch -f "$original_branch" >/dev/null 2>&1; then
+        echo "[$id #$trial] WARN failed to restore branch $original_branch (was on $current_branch)" >&2
+      fi
+    fi
+  fi
+
+  # ---------- T021: trial teardown ----------
+  # setup と対称の処理。worktree (REPO_ROOT) で実行し、失敗は WARN のみ。
+  # timeout / jsonl_missing 経路でも cleanup の前を通るので teardown は走る。
+  # 早期 return している経路は new_workspace_parse_failed (L117) と ready_timeout
+  # (L138) の 2 つのみで、いずれも workspace 起動前なので teardown 必要なし。
+  local teardown
+  teardown=$(jq -r '.teardown // empty' <<<"$scenario_json")
+  if [[ -n "$teardown" ]]; then
+    if ! ( cd "$REPO_ROOT" && bash -c "$teardown" ); then
+      echo "[$id #$trial] WARN teardown failed: $teardown" >&2
+    fi
+  fi
 }
 
 # ---------- main loop ----------

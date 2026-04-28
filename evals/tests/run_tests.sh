@@ -30,8 +30,15 @@ run "py_compile test_summarize.py" python3 -m py_compile "$EVAL_DIR/tests/test_s
 # T1: encode_cwd の実値突き合わせ
 run "test_encode_path.sh" bash "$EVAL_DIR/tests/test_encode_path.sh"
 
-# T2-T6: summarize.py 単体テスト
-run "test_summarize.py (unittest)" \
+# T021: build_settings.sh の hook timeout 引数化テスト
+run "test_build_settings.sh" bash "$EVAL_DIR/tests/test_build_settings.sh"
+
+# T021: scenarios.jsonl の lifecycle (setup/teardown) と run.sh sanity
+run "test_scenarios_lifecycle.sh" bash "$EVAL_DIR/tests/test_scenarios_lifecycle.sh"
+
+# T2-T6 + T021: summarize.py / check_tools_missing.py 単体テスト
+# (test_check_tools_missing.py も discover で自動拾い)
+run "test_summarize.py / test_check_tools_missing.py (unittest)" \
   python3 -m unittest discover -s "$EVAL_DIR/tests" -p 'test_*.py'
 
 # scenarios.jsonl の load (本番 fail-fast の現地確認)

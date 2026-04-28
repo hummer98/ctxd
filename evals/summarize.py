@@ -25,6 +25,7 @@ ERROR_EXIT_STATUSES = {
     "claude_crashed",
     "ready_timeout",
     "new_workspace_parse_failed",
+    "tools_missing",  # T021: hook 出力 + session JSONL 双方で tool_use 0 件
 }
 
 REQUIRED_SCENARIO_KEYS = ("id", "prompt", "expected_tool", "expected_args_pattern")
@@ -221,6 +222,12 @@ def load_scenarios(path: Path | str) -> List[Dict[str, Any]]:
                     raise ValueError(
                         f"line {lineno}: setup must be a string, got "
                         f"{type(obj['setup']).__name__}"
+                    )
+            if "teardown" in obj and obj["teardown"] is not None:
+                if not isinstance(obj["teardown"], str):
+                    raise ValueError(
+                        f"line {lineno}: teardown must be a string, got "
+                        f"{type(obj['teardown']).__name__}"
                     )
             obj.setdefault("match_mode", "any")
             scenarios.append(obj)

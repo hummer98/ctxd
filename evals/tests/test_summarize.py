@@ -114,6 +114,7 @@ class TestMatchPassFailError(unittest.TestCase):
             "claude_crashed",
             "ready_timeout",
             "new_workspace_parse_failed",
+            "tools_missing",
         ):
             with self.subTest(exit_status=status):
                 self.assertEqual(
@@ -293,6 +294,69 @@ class TestLoadScenariosSetupField(unittest.TestCase):
                     "expected_tool": "Bash",
                     "expected_args_pattern": r"ctxd",
                     "setup": 123,
+                }
+            )
+            + "\n"
+        )
+        with self.assertRaises((SystemExit, ValueError)):
+            summarize.load_scenarios(path)
+
+
+class TestLoadScenariosTeardownField(unittest.TestCase):
+    """T021: scenarios の任意 teardown フィールド (str / 不在 / 非 string で fail)."""
+
+    def _write(self, content: str) -> str:
+        f = tempfile.NamedTemporaryFile(
+            mode="w", suffix=".jsonl", delete=False, encoding="utf-8"
+        )
+        f.write(content)
+        f.close()
+        self.addCleanup(os.unlink, f.name)
+        return f.name
+
+    def test_teardown_string_accepted(self):
+        path = self._write(
+            json.dumps(
+                {
+                    "id": "x",
+                    "prompt": "p",
+                    "expected_tool": "Bash",
+                    "expected_args_pattern": r"ctxd",
+                    "teardown": "git branch -D feature-eval 2>/dev/null || true",
+                }
+            )
+            + "\n"
+        )
+        scenarios = summarize.load_scenarios(path)
+        self.assertEqual(len(scenarios), 1)
+        self.assertIn("git branch -D feature-eval", scenarios[0].get("teardown", ""))
+
+    def test_teardown_absent_accepted(self):
+        """teardown 不在は default 動作 (実行しない) — load 自体は成功する."""
+        path = self._write(
+            json.dumps(
+                {
+                    "id": "x",
+                    "prompt": "p",
+                    "expected_tool": "Bash",
+                    "expected_args_pattern": r"ctxd",
+                }
+            )
+            + "\n"
+        )
+        scenarios = summarize.load_scenarios(path)
+        self.assertEqual(len(scenarios), 1)
+        self.assertFalse(scenarios[0].get("teardown"))
+
+    def test_teardown_non_string_rejected(self):
+        path = self._write(
+            json.dumps(
+                {
+                    "id": "x",
+                    "prompt": "p",
+                    "expected_tool": "Bash",
+                    "expected_args_pattern": r"ctxd",
+                    "teardown": 123,
                 }
             )
             + "\n"

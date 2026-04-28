@@ -5,36 +5,47 @@
 #   bash evals/lib/build_settings.sh \
 #     --tool-uses-out /abs/path/session-<id>-<trial>.tools.jsonl \
 #     --stop-sentinel /abs/path/session-<id>-<trial>.done \
+#     [--hook-timeout-ms <N>] \
 #     --out          /abs/path/session-<id>-<trial>.settings.json
 #
 # 生成 settings.json は以下を含む:
 #   - PostToolUse hook: python3 <repo>/evals/lib/hook-tool-use.py <tool-uses-out>
 #   - Stop hook:        bash -c 'touch <stop-sentinel>'
+#   - 両 hook の timeout は --hook-timeout-ms (default 10000) を共有.
+#     (T021: PostToolUse の python3 cold-start 余裕を稼ぐため 5000→10000.
+#      Stop hook は touch のみで律速にはならないが、設定対称化のため共有.)
 #
 # 前提:
 #   - 引数で渡される path に空白 / シングルクォート / 制御文字は含めない (実用上問題ない).
 #   - JSON 値は python3 の json.dumps を経由してエスケープするので、bash の word splitting
 #     とは独立に safe.
 #
-# 失敗条件: 必須引数欠落で exit 2.
+# 失敗条件: 必須引数欠落 or 不正な --hook-timeout-ms で exit 2.
 
 set -euo pipefail
 
 TOOL_USES_OUT=""
 STOP_SENTINEL=""
 OUT=""
+HOOK_TIMEOUT_MS="10000"
 
 while (( $# > 0 )); do
   case "$1" in
-    --tool-uses-out) TOOL_USES_OUT="$2"; shift 2 ;;
-    --stop-sentinel) STOP_SENTINEL="$2"; shift 2 ;;
-    --out)           OUT="$2"; shift 2 ;;
+    --tool-uses-out)   TOOL_USES_OUT="$2"; shift 2 ;;
+    --stop-sentinel)   STOP_SENTINEL="$2"; shift 2 ;;
+    --hook-timeout-ms) HOOK_TIMEOUT_MS="$2"; shift 2 ;;
+    --out)             OUT="$2"; shift 2 ;;
     *)
       echo "build_settings.sh: unknown arg: $1" >&2
       exit 2
       ;;
   esac
 done
+
+if ! [[ "$HOOK_TIMEOUT_MS" =~ ^[0-9]+$ ]]; then
+  echo "build_settings.sh: --hook-timeout-ms must be a positive integer, got '$HOOK_TIMEOUT_MS'" >&2
+  exit 2
+fi
 
 if [[ -z "$TOOL_USES_OUT" || -z "$STOP_SENTINEL" || -z "$OUT" ]]; then
   echo "build_settings.sh: missing required args (--tool-uses-out / --stop-sentinel / --out)" >&2
@@ -56,6 +67,7 @@ mkdir -p "$(dirname "$OUT")"
 TOOL_USES_OUT="$TOOL_USES_OUT" \
 STOP_SENTINEL="$STOP_SENTINEL" \
 HOOK_PY="$HOOK_PY" \
+HOOK_TIMEOUT_MS="$HOOK_TIMEOUT_MS" \
 OUT="$OUT" \
 python3 - <<'PY'
 import json, os, sys
@@ -63,6 +75,7 @@ import json, os, sys
 hook_py        = os.environ["HOOK_PY"]
 tool_uses_out  = os.environ["TOOL_USES_OUT"]
 stop_sentinel  = os.environ["STOP_SENTINEL"]
+hook_timeout   = int(os.environ["HOOK_TIMEOUT_MS"])
 out            = os.environ["OUT"]
 
 post_cmd = f"python3 {hook_py} {tool_uses_out}"
@@ -74,7 +87,7 @@ settings = {
             {
                 "matcher": "",
                 "hooks": [
-                    {"type": "command", "command": post_cmd, "timeout": 5000},
+                    {"type": "command", "command": post_cmd, "timeout": hook_timeout},
                 ],
             }
         ],
@@ -82,7 +95,7 @@ settings = {
             {
                 "matcher": "",
                 "hooks": [
-                    {"type": "command", "command": stop_cmd, "timeout": 5000},
+                    {"type": "command", "command": stop_cmd, "timeout": hook_timeout},
                 ],
             }
         ],
