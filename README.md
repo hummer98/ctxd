@@ -326,6 +326,22 @@ Cost / time budget: each trial spends a few model cents. Default `EVAL_N=3` × 5
 
 `evals/.eval-plugin/` (plugin shim that wires `skills/ctxd` into the Skills loader) is git-ignored — the harness regenerates the shim on every run, dynamically writing the `version` from `.claude-plugin/plugin.json`.
 
+### Adherence over plugin versions
+
+How often the agent reaches for `ctxd` when the SKILL says it should, across plugin versions.
+The figures below come from the `evals/run.sh` harness — per-scenario breakdown below.
+
+| plugin version | N | trials | overall | chdir | git-switch | env-set | notes |
+|---|---:|---:|---:|---:|---:|---:|---|
+| 0.1.0 | 3 | 15 | 0.0% | 0/6 | 0/6 | 0/3 | Initial baseline; hook-based harness landed (T013–T015) |
+| 0.1.1 | 3 | 15 | 6.7% | 0/6 | 0/6 | 1/3 | SKILL.md trigger reinforced (description, ❌→✅ examples) (T016) |
+| 0.1.2 | 3 | 15 | 53.3% | 5/6 | 1/6 | 2/3 | disambiguation + NEVER phrasing + Precondition section (T017) |
+| 0.1.3 | 3 | 15 | 100.0% | 6/6 | 6/6 | 3/3 | pattern matcher tightened + scenario setup hooks + plugin author (T018) |
+| 0.1.3 | 10 | 50 | 98.0% | 20/20 | 19/20 | 10/10 | Variance check at N=10 (T019) |
+
+`N` is trials per scenario; `trials` is N × 5 scenarios. Each cell shows passes / trials for that command family.
+The latest baseline lives in [`evals/results/index.md`](evals/results/index.md) — the table here is updated by hand, see [`CLAUDE.md`](CLAUDE.md).
+
 ---
 
 ## Status

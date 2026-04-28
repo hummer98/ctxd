@@ -21,6 +21,7 @@
 - **scenarios の追加・更新を検討する**: 新コマンドや新章を SKILL に足したなら、`evals/scenarios.jsonl` にもそれを試すシナリオを追加すべきか考える。既存 scenario の `expected_args_pattern` も、SKILL.md の変更によって意図が変わっていないか確認する。
 - **`.claude-plugin/plugin.json` の `description` の整合性を確認する**: SKILL.md frontmatter の `description` (長文 / when-to-use の本文) と `.claude-plugin/plugin.json` の `description` (短文要約、`claude plugin validate` の上限内) は独立に管理する。SKILL.md の意図が大きく変わったら plugin.json 側の要約も合わせて更新する。Q1 reviewer note 参照。
 - **派生先は手動同期しない**: `evals/.eval-plugin/.claude-plugin/plugin.json` の `version` は `evals/run.sh` の起動時に真のソース (`.claude-plugin/plugin.json`) から動的に再生成される。手動同期は不要。
+- **README の統計テーブルを更新する**: 新しい version で本走 (5 scenarios 揃いで harness 完走した run) を取ったら、`README.md` の `### Adherence over plugin versions` と `README.ja.md` の `### バージョン別 SKILL 遵守率` に 1 行追記する。採用 run の選別基準は「5 scenarios 揃い / harness-aborted でない / 同一 version 内で最新」。自動生成スクリプトは現時点で未整備なので手動運用。
 
 ## 真のソースの位置
 

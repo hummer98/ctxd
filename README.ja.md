@@ -310,6 +310,22 @@ plugin version は `.claude-plugin/plugin.json` の `version` を真のソース
 
 `evals/.eval-plugin/` (Skills loader に `skills/ctxd` を登録するためのシム) は git 管理外です — harness が毎回再生成し、`.claude-plugin/plugin.json` の `version` を動的に書き込みます。
 
+### バージョン別 SKILL 遵守率
+
+SKILL.md が指示する場面で agent が `ctxd` に手を伸ばす割合を、plugin version ごとに比較したものです。
+数値は `evals/run.sh` harness の出力です。コマンド系列ごとの内訳も併記しています。
+
+| plugin version | N | trials | overall | chdir | git-switch | env-set | notes |
+|---|---:|---:|---:|---:|---:|---:|---|
+| 0.1.0 | 3 | 15 | 0.0% | 0/6 | 0/6 | 0/3 | 初期 baseline / hook-based harness 整備 (T013-T015) |
+| 0.1.1 | 3 | 15 | 6.7% | 0/6 | 0/6 | 1/3 | SKILL.md trigger 強化 (description / ❌→✅ 例) (T016) |
+| 0.1.2 | 3 | 15 | 53.3% | 5/6 | 1/6 | 2/3 | disambiguation + NEVER 表現 + Precondition 章追加 (T017) |
+| 0.1.3 | 3 | 15 | 100.0% | 6/6 | 6/6 | 3/3 | pattern matcher 改良 + scenario setup hook + author 追加 (T018) |
+| 0.1.3 | 10 | 50 | 98.0% | 20/20 | 19/20 | 10/10 | N=10 揺らぎ調査 (T019) |
+
+`N` は scenario あたりの試行回数、`trials` は N × 5 scenarios。各セルは pass / trials を示します。
+最新の baseline は [`evals/results/index.md`](evals/results/index.md) を参照してください。本表の更新運用は [`CLAUDE.md`](CLAUDE.md) を参照。
+
 ---
 
 ## ステータス
