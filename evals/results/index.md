@@ -16,3 +16,4 @@
 | 20260428-042123 | claude-opus-4-7 | 0.1.3 | 2.1.121 (Claude Code) | bb40eb2 | 98.0% | chdir-01:1.0;chdir-02:1.0;git-switch-01:0.9;git-switch-02:1.0;env-set-01:1.0 |
 | 20260428-054428 | claude-opus-4-7 | 0.1.3 | 2.1.121 (Claude Code) | cf50a94 | 93.3% | chdir-01:1.0;chdir-02:0.67;git-switch-01:1.0;git-switch-02:1.0;env-set-01:1.0 |
 | 20260428-122400 | claude-opus-4-7 | 0.1.3 | 2.1.121 (Claude Code) | cf50a94 | 100.0% | chdir-01:1.0;chdir-02:1.0;git-switch-01:1.0;git-switch-02:1.0;env-set-01:1.0 |
+| 20260429-022216 | claude-opus-4-7 | 0.2.0 | 2.1.122 (Claude Code) | 96a51fa | 100.0% | chdir-01:1.0;chdir-02:1.0;git-switch-01:1.0;git-switch-02:1.0;env-set-01:1.0 |

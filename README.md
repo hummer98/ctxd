@@ -340,6 +340,7 @@ The figures below come from the `evals/run.sh` harness — per-scenario breakdow
 | claude-opus-4-7 | 0.1.2 | 3 | 15 | 53.3% | 5/6 | 1/6 | 2/3 | disambiguation + NEVER phrasing + Precondition section (T017) |
 | claude-opus-4-7 | 0.1.3 | 3 | 15 | 100.0% | 6/6 | 6/6 | 3/3 | pattern matcher tightened + scenario setup hooks + plugin author (T018) |
 | claude-opus-4-7 | 0.1.3 | 10 | 50 | 98.0% | 20/20 | 19/20 | 10/10 | Variance check at N=10 (T019) |
+| claude-opus-4-7 | 0.2.0 | 3 | 15 | 100.0% | 6/6 | 6/6 | 3/3 | SKILL.md Postcondition section rewritten to match T010 final implementation (`--expect` DSL + Result.Data preserved on failure) (T023) |
 
 `N` is trials per scenario; `trials` is N × 5 scenarios. Each cell shows passes / trials for that command family.
 Model is part of the run identity — switching to a different `EVAL_MODEL` (e.g. `claude-sonnet-4-5`) requires re-running the baseline; rows are not directly comparable across models.
