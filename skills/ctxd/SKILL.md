@@ -270,17 +270,15 @@ Multiple arguments are accepted in a single call; values may contain `=` (the fi
 
 ## Postcondition assertions (`--expect`)
 
-All ctxd subcommands accept a repeatable `--expect KEY=VALUE` flag for asserting state after the command runs.
+All ctxd subcommands accept a repeatable `--expect KEY=VALUE` flag for asserting state after the command runs. The verifier is live: when any check fails the envelope's `ok` flips to `false` with `error.code = "postcondition_failed"`, while `result` (the observed state) is preserved so the agent still sees what actually happened.
 
-> Note: the postcondition DSL is finalized in T10. The MVP accepts `--expect` flags but the verifier is currently a NoOp (`postcondition.passed` is always `true`, `checks` is always `[]`). The example below shows the *intended shape*; the left-hand key resolution and right-hand value syntax may change in T10.
+Keys use dot notation against the command's `result` payload (e.g. `cwd`, `git_branch`, `diff.added`, `set.FOO`). Operators are `=` / `==` (equal), `!=` (not equal), and `contains` (substring for strings, membership for arrays). Multiple `--expect` flags are AND-composed.
 
-Intended usage (subject to change):
+Successful run — every check passes, so `ok` stays `true`:
 
 ```bash
 ctxd chdir /repo --expect cwd=/repo --expect git_branch=main
 ```
-
-Once T10 lands, the envelope will include a `postcondition` object alongside `result`:
 
 ```json
 {
@@ -290,13 +288,39 @@ Once T10 lands, the envelope will include a `postcondition` object alongside `re
   "result": { "cwd": "/repo", "git_branch": "main", "listing": ["..."] },
   "postcondition": {
     "passed": true,
-    "checks": []
+    "checks": [
+      {"key": "cwd",        "expected": "/repo", "actual": "/repo", "passed": true},
+      {"key": "git_branch", "expected": "main",  "actual": "main",  "passed": true}
+    ]
   },
   "elapsed_ms": 5
 }
 ```
 
-Until T10 finalizes the DSL, treat `--expect` as a hint to the agent only; do not rely on its return value to gate a workflow.
+Failing run — the underlying mutation may have succeeded, but a postcondition did not hold, so `ok` is `false` and the failed `Check` records the observed value in `actual`:
+
+```json
+{
+  "ok": false,
+  "cmd": "chdir",
+  "args": ["/tmp/foo"],
+  "result": { "cwd": "/tmp/foo", "git_branch": null, "listing": [] },
+  "error": {
+    "code": "postcondition_failed",
+    "message": "postcondition failed: 1 of 1 checks did not pass",
+    "retryable": false
+  },
+  "postcondition": {
+    "passed": false,
+    "checks": [
+      {"key": "cwd", "expected": "/nope", "actual": "/tmp/foo", "passed": false}
+    ]
+  },
+  "elapsed_ms": 3
+}
+```
+
+Use `--expect` to gate workflow steps: the envelope's `ok` is a reliable boolean, and each failed `Check.actual` is the authoritative observation for that key. For the full DSL grammar (literal types, `!=` type-mismatch behavior, available keys per command, shell quoting tips, MVP non-features) see [`docs/postcondition-dsl.md`](../../docs/postcondition-dsl.md) §3-§10.
 
 ## Tone & non-goals
 

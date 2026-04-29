@@ -1,6 +1,6 @@
 {
   "name": "ctxd",
-  "version": "0.1.3",
+  "version": "0.2.0",
   "description": "Declarative companion to shell state mutations (cd, export, git checkout/switch). Emits structured JSON describing cwd, env, and git state.",
   "author": {
     "name": "Yuji Yamamoto",
