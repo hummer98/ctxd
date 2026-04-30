@@ -507,9 +507,10 @@ class TestRenderIndexRow(unittest.TestCase):
         self.assertIn("20260427-120130", csv_row)
         self.assertIn("73.3%", csv_row)
         self.assertIn("claude-opus-4-7", csv_row)
-        # T022: csv は 7 列 (timestamp,model,plugin_version,claude_version,git_sha,
-        # overall_rate,per_scenario_rates) なので `,` は 6 個
-        self.assertEqual(csv_row.count(","), 6)
+        # T024: csv は 11 列 (timestamp,model,plugin_version,claude_version,git_sha,
+        # overall_rate,per_scenario_rates,avg_tool_uses,avg_input_tokens,
+        # avg_output_tokens,avg_wall_ms) なので `,` は 10 個
+        self.assertEqual(csv_row.count(","), 10)
 
     def test_per_scenario_rates_preserve_input_order(self):
         """S1: render_index_row が per_scenario の入力順を保証する."""
@@ -688,8 +689,8 @@ class TestRenderIndexRowModel(unittest.TestCase):
             overall_rate=0.5, per_scenario=[("a", 1.0)],
             model="claude,opus",
         )
-        # csv 列数は 7 のまま (model 内の `,` が `;` に置換されているはず)
-        self.assertEqual(csv_row.count(","), 6)
+        # csv 列数は 11 のまま (model 内の `,` が `;` に置換されているはず) — T024
+        self.assertEqual(csv_row.count(","), 10)
         self.assertIn("claude;opus", csv_row)
 
 
@@ -730,16 +731,20 @@ class TestIndexHeadingHasModelColumn(unittest.TestCase):
             content = p.read_text(encoding="utf-8")
             heading = content.splitlines()[0]
             fields = heading.split(",")
-            # 7 列、index 1 が model
-            self.assertEqual(len(fields), 7)
+            # T024: 11 列。index 1 が model、末尾 4 列が efficiency 指標
+            self.assertEqual(len(fields), 11)
             self.assertEqual(fields[0], "timestamp")
             self.assertEqual(fields[1], "model")
             self.assertEqual(fields[2], "plugin_version")
+            self.assertEqual(fields[-4], "avg_tool_uses")
+            self.assertEqual(fields[-3], "avg_input_tokens")
+            self.assertEqual(fields[-2], "avg_output_tokens")
+            self.assertEqual(fields[-1], "avg_wall_ms")
 
-    def test_csv_data_row_has_seven_fields(self):
-        """index.csv の各行が必ず 7 フィールドを持つことの保証
+    def test_csv_data_row_has_eleven_fields(self):
+        """index.csv の各行が必ず 11 フィールドを持つことの保証 (T024).
 
-        (model 列が抜けると csv が壊れる回帰検出用 — DoD §5)。
+        (model / efficiency 列が抜けると csv が壊れる回帰検出用 — DoD §5)。
         """
         with tempfile.TemporaryDirectory() as td:
             p = Path(td) / "index.csv"
@@ -747,7 +752,7 @@ class TestIndexHeadingHasModelColumn(unittest.TestCase):
             summarize._append_index(p, csv_row, kind="csv")
             summarize._append_index(p, csv_row, kind="csv")
             for line in p.read_text(encoding="utf-8").splitlines():
-                self.assertEqual(line.count(","), 6, msg=f"row: {line!r}")
+                self.assertEqual(line.count(","), 10, msg=f"row: {line!r}")
 
 
 class TestRenderSummaryModel(unittest.TestCase):
@@ -879,6 +884,307 @@ class TestScenariosSchemaValidation(unittest.TestCase):
         scenarios = summarize.load_scenarios(path)
         self.assertEqual(len(scenarios), 1)
         self.assertEqual(scenarios[0]["id"], "chdir-01")
+
+
+class TestExtractTokenUsage(unittest.TestCase):
+    """T024: assistant メッセージの usage を合算する."""
+
+    def _write_jsonl(self, lines: List[str]) -> str:
+        f = tempfile.NamedTemporaryFile(
+            mode="w", suffix=".jsonl", delete=False, encoding="utf-8"
+        )
+        for line in lines:
+            f.write(line + "\n")
+        f.close()
+        self.addCleanup(os.unlink, f.name)
+        return f.name
+
+    def test_sums_input_and_output_tokens_across_assistants(self):
+        path = self._write_jsonl([
+            json.dumps({
+                "type": "assistant",
+                "message": {"role": "assistant", "usage": {
+                    "input_tokens": 10, "output_tokens": 5,
+                    "cache_creation_input_tokens": 0, "cache_read_input_tokens": 0,
+                }},
+            }),
+            json.dumps({
+                "type": "user",
+                "message": {"role": "user", "content": "hi"},
+            }),
+            json.dumps({
+                "type": "assistant",
+                "message": {"role": "assistant", "usage": {
+                    "input_tokens": 3, "output_tokens": 7,
+                    "cache_creation_input_tokens": 100, "cache_read_input_tokens": 200,
+                }},
+            }),
+        ])
+        usage = summarize.extract_token_usage(path)
+        self.assertEqual(usage["input_tokens"], 13)
+        self.assertEqual(usage["output_tokens"], 12)
+        self.assertEqual(usage["cache_creation_input_tokens"], 100)
+        self.assertEqual(usage["cache_read_input_tokens"], 200)
+
+    def test_returns_zero_when_file_missing(self):
+        usage = summarize.extract_token_usage("/nonexistent/path/x.jsonl")
+        self.assertEqual(usage, {
+            "input_tokens": 0,
+            "cache_creation_input_tokens": 0,
+            "cache_read_input_tokens": 0,
+            "output_tokens": 0,
+        })
+
+    def test_skips_non_assistant_records(self):
+        path = self._write_jsonl([
+            json.dumps({"type": "user", "message": {"usage": {"input_tokens": 999}}}),
+            json.dumps({"type": "system", "message": {"usage": {"input_tokens": 999}}}),
+            json.dumps({
+                "type": "assistant",
+                "message": {"usage": {"input_tokens": 1, "output_tokens": 2}},
+            }),
+        ])
+        usage = summarize.extract_token_usage(path)
+        # user / system の usage は無視される
+        self.assertEqual(usage["input_tokens"], 1)
+        self.assertEqual(usage["output_tokens"], 2)
+
+    def test_handles_assistant_without_usage(self):
+        """usage キーが無い assistant 行は無視される (drift 抑制)."""
+        path = self._write_jsonl([
+            json.dumps({"type": "assistant", "message": {"content": []}}),
+            json.dumps({
+                "type": "assistant",
+                "message": {"usage": {"input_tokens": 5, "output_tokens": 1}},
+            }),
+        ])
+        usage = summarize.extract_token_usage(path)
+        self.assertEqual(usage["input_tokens"], 5)
+        self.assertEqual(usage["output_tokens"], 1)
+
+    def test_includes_sidechain_subagent_usage(self):
+        """isSidechain=True の usage も課金対象なので合算する.
+
+        (tool_use 抽出側は sidechain を除外するが、tokens は別扱い: T024 設計判断).
+        """
+        path = self._write_jsonl([
+            json.dumps({
+                "type": "assistant", "isSidechain": True,
+                "message": {"usage": {"input_tokens": 50, "output_tokens": 10}},
+            }),
+            json.dumps({
+                "type": "assistant", "isSidechain": False,
+                "message": {"usage": {"input_tokens": 5, "output_tokens": 1}},
+            }),
+        ])
+        usage = summarize.extract_token_usage(path)
+        self.assertEqual(usage["input_tokens"], 55)
+        self.assertEqual(usage["output_tokens"], 11)
+
+
+class TestEfficiencyForTrials(unittest.TestCase):
+    """T024: _efficiency_for_trials の avg / median 計算."""
+
+    def test_empty_returns_zeros(self):
+        eff = summarize._efficiency_for_trials([])
+        self.assertEqual(eff["count"], 0)
+        self.assertEqual(eff["tool_uses_avg"], 0)
+        self.assertEqual(eff["wall_ms_avg"], 0)
+
+    def test_avg_is_round_half_up(self):
+        trials = [
+            {"tool_uses_count": 3, "wall_seconds": 1,
+             "usage": {"input_tokens": 100, "cache_creation_input_tokens": 0,
+                       "cache_read_input_tokens": 0, "output_tokens": 50}},
+            {"tool_uses_count": 4, "wall_seconds": 2,
+             "usage": {"input_tokens": 110, "cache_creation_input_tokens": 0,
+                       "cache_read_input_tokens": 0, "output_tokens": 50}},
+        ]
+        eff = summarize._efficiency_for_trials(trials)
+        self.assertEqual(eff["count"], 2)
+        # tool_uses_avg = (3+4)/2 = 3.5 → 4 (round-half-up)
+        self.assertEqual(eff["tool_uses_avg"], 4)
+        self.assertEqual(eff["input_tokens_avg"], 105)
+        self.assertEqual(eff["output_tokens_avg"], 50)
+        # wall_ms = wall_seconds * 1000
+        self.assertEqual(eff["wall_ms_avg"], 1500)
+
+    def test_median_with_odd_count(self):
+        trials = [
+            {"tool_uses_count": 1, "wall_seconds": 5,
+             "usage": {"input_tokens": 0, "cache_creation_input_tokens": 0,
+                       "cache_read_input_tokens": 0, "output_tokens": 0}},
+            {"tool_uses_count": 2, "wall_seconds": 10,
+             "usage": {"input_tokens": 0, "cache_creation_input_tokens": 0,
+                       "cache_read_input_tokens": 0, "output_tokens": 0}},
+            {"tool_uses_count": 3, "wall_seconds": 100,
+             "usage": {"input_tokens": 0, "cache_creation_input_tokens": 0,
+                       "cache_read_input_tokens": 0, "output_tokens": 0}},
+        ]
+        eff = summarize._efficiency_for_trials(trials)
+        # median(5,10,100) = 10 → 10000 ms
+        self.assertEqual(eff["wall_ms_median"], 10000.0)
+
+    def test_handles_missing_usage(self):
+        """usage キーが無い trial 群でも 0 で集計できる (raw データ欠損経路)."""
+        trials = [{"tool_uses_count": 2, "wall_seconds": 3}]
+        eff = summarize._efficiency_for_trials(trials)
+        self.assertEqual(eff["input_tokens_avg"], 0)
+        self.assertEqual(eff["tool_uses_avg"], 2)
+        self.assertEqual(eff["wall_ms_avg"], 3000)
+
+
+class TestRenderIndexRowEfficiency(unittest.TestCase):
+    """T024: render_index_row が効率指標 4 列を末尾に追加する."""
+
+    def test_efficiency_columns_appended_to_md_row(self):
+        md_row, _ = summarize.render_index_row(
+            timestamp="ts1", plugin_version="0.2.0",
+            claude_version="2.1.122 (Claude Code)", git_sha="abc1234",
+            overall_rate=1.0, per_scenario=[("chdir-01", 1.0)],
+            model="claude-opus-4-7",
+            avg_tool_uses=5,
+            avg_input_tokens=12345,
+            avg_output_tokens=678,
+            avg_wall_ms=12000,
+        )
+        self.assertIn("| 5 |", md_row)
+        self.assertIn("| 12345 |", md_row)
+        self.assertIn("| 678 |", md_row)
+        self.assertIn("| 12000 |", md_row)
+
+    def test_efficiency_columns_appended_to_csv_row(self):
+        _, csv_row = summarize.render_index_row(
+            timestamp="ts1", plugin_version="0.2.0",
+            claude_version="c", git_sha="s",
+            overall_rate=1.0, per_scenario=[("chdir-01", 1.0)],
+            model="m",
+            avg_tool_uses=5,
+            avg_input_tokens=12345,
+            avg_output_tokens=678,
+            avg_wall_ms=12000,
+        )
+        fields = csv_row.split(",")
+        self.assertEqual(fields[-4], "5")
+        self.assertEqual(fields[-3], "12345")
+        self.assertEqual(fields[-2], "678")
+        self.assertEqual(fields[-1], "12000")
+
+    def test_dash_default_for_missing_efficiency(self):
+        """効率指標を渡さないと `-` で埋める (過去 run の遡及で raw データ欠損経路)."""
+        md_row, csv_row = summarize.render_index_row(
+            timestamp="ts1", plugin_version="0.1.0", claude_version="c", git_sha="s",
+            overall_rate=0.0, per_scenario=[("a", 0.0)],
+        )
+        self.assertIn("| - | - | - | - |", md_row)
+        fields = csv_row.split(",")
+        self.assertEqual(fields[-4:], ["-", "-", "-", "-"])
+
+    def test_float_efficiency_rounded_to_int(self):
+        """avg_input_tokens 等が float (不浮動 avg) でも int に丸めて表示."""
+        _, csv_row = summarize.render_index_row(
+            timestamp="t", plugin_version="v", claude_version="c", git_sha="s",
+            overall_rate=0.5, per_scenario=[("a", 1.0)],
+            model="m",
+            avg_tool_uses=3.49,
+            avg_input_tokens=12345.6,
+            avg_output_tokens=0.0,
+            avg_wall_ms=999.5,
+        )
+        fields = csv_row.split(",")
+        # 3.49 → 3 (round-half-up)
+        self.assertEqual(fields[-4], "3")
+        self.assertEqual(fields[-3], "12346")
+        self.assertEqual(fields[-2], "0")
+        # 999.5 → 1000 (banker's rounding might give 1000)
+        self.assertEqual(fields[-1], "1000")
+
+
+class TestRenderSummaryEfficiencySection(unittest.TestCase):
+    """T024: render_summary が efficiency セクションを出力する."""
+
+    def _trial(self, sid: str, trial: int, tokens: int, wall: int, tool_uses: int = 1):
+        return {
+            "scenario_id": sid,
+            "category": "x",
+            "trial": trial,
+            "verdict": "pass",
+            "exit_status": "ok",
+            "tool_uses": [{"name": "Bash", "input": {"command": f"ctxd chdir /t/{sid}"}}] * tool_uses,
+            "tool_uses_count": tool_uses,
+            "usage": {
+                "input_tokens": tokens,
+                "cache_creation_input_tokens": 0,
+                "cache_read_input_tokens": 0,
+                "output_tokens": tokens // 2,
+            },
+            "wall_seconds": wall,
+        }
+
+    def test_efficiency_table_appears_when_data_present(self):
+        results = [
+            self._trial("chdir-01", 1, 1000, 5),
+            self._trial("chdir-01", 2, 1100, 6),
+        ]
+        scenarios = [
+            {"id": "chdir-01", "category": "x", "expected_tool": "Bash",
+             "expected_args_pattern": "ctxd", "prompt": "p"},
+        ]
+        md = summarize.render_summary(
+            results=results, scenarios=scenarios,
+            claude_version="x", n=2, timestamp="t",
+            plugin_version="0.2.0", git_sha="s", git_branch="b",
+            model="claude-opus-4-7",
+        )
+        self.assertIn("## efficiency", md)
+        self.assertIn("avg_tool_uses", md)
+        self.assertIn("avg_input_tokens", md)
+        self.assertIn("avg_wall_ms", md)
+        # all-trial 集計行が **(all)** で出る
+        self.assertIn("(all)", md)
+
+    def test_efficiency_table_omitted_for_legacy_results_without_usage(self):
+        """効率指標を持たない results (古い load 経路 / unit test 専用) では表が出ない."""
+        results = [
+            {"scenario_id": "x", "category": "x", "trial": 1,
+             "verdict": "pass", "exit_status": "ok"},
+        ]
+        scenarios = [
+            {"id": "x", "category": "x", "expected_tool": "Bash",
+             "expected_args_pattern": "ctxd", "prompt": "p"},
+        ]
+        md = summarize.render_summary(
+            results=results, scenarios=scenarios,
+            claude_version="x", n=1, timestamp="t",
+        )
+        # legacy 経路 (usage / wall_seconds / tool_uses_count いずれも持たない) では
+        # efficiency 章が出ない (T024: 後方互換性).
+        self.assertNotIn("## efficiency", md)
+
+
+class TestIndexHeadingHasEfficiencyColumns(unittest.TestCase):
+    """T024: 新規 index.{md,csv} を作るとき heading に効率指標 4 列が含まれる."""
+
+    def test_md_heading_includes_efficiency(self):
+        with tempfile.TemporaryDirectory() as td:
+            p = Path(td) / "index.md"
+            md_row, _ = summarize.render_index_row(
+                timestamp="t", plugin_version="v", claude_version="c", git_sha="s",
+                overall_rate=1.0, per_scenario=[("a", 1.0)],
+                model="m",
+                avg_tool_uses=1, avg_input_tokens=2,
+                avg_output_tokens=3, avg_wall_ms=4,
+            )
+            summarize._append_index(p, md_row, kind="md")
+            content = p.read_text(encoding="utf-8")
+            heading_line = next(
+                (l for l in content.splitlines() if l.startswith("| timestamp")),
+                "",
+            )
+            self.assertIn("avg_tool_uses", heading_line)
+            self.assertIn("avg_input_tokens", heading_line)
+            self.assertIn("avg_output_tokens", heading_line)
+            self.assertIn("avg_wall_ms", heading_line)
 
 
 if __name__ == "__main__":
