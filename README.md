@@ -346,6 +346,24 @@ The figures below come from the `evals/run.sh` harness — per-scenario breakdow
 Model is part of the run identity — switching to a different `EVAL_MODEL` (e.g. `claude-sonnet-4-5`) requires re-running the baseline; rows are not directly comparable across models.
 The latest baseline lives in [`evals/results/index.md`](evals/results/index.md) — the table here is updated by hand, see [`CLAUDE.md`](CLAUDE.md).
 
+### Efficiency over plugin versions
+
+What did adopting the SKILL cost in tokens, tool-uses, and wall time? Adherence
+(above) measures whether the agent reaches for `ctxd`; efficiency measures what
+it took to get there. Numbers are per-trial averages collected by the same
+`evals/run.sh` harness, with `EVAL_N=3` × 5 scenarios.
+
+| model | plugin version | avg_tool_uses | avg_input_tokens | avg_output_tokens | avg_wall_ms | notes |
+|---|---|---:|---:|---:|---:|---|
+| claude-opus-4-7 | ≤ 0.2.0 | – | – | – | – | Pre-T024 runs; raw session JSONL was git-ignored and pruned, so retroactive efficiency numbers are unavailable. |
+
+`avg_input_tokens` is the sum of fresh `input_tokens` across all `assistant`
+messages in a trial (cache writes and reads are tracked separately in each
+run's `summary.md`). `avg_wall_ms` is integer-second precision (the raw
+`wall_seconds` from `meta.json` × 1000). The Stage 1 baseline gets seeded the
+next time `evals/run.sh` runs after this commit; until then, the row above
+documents that nothing was recoverable from past runs.
+
 ---
 
 ## Status
