@@ -1,0 +1,141 @@
+{
+  "generated_at": "2026-05-02T00:00:00Z",
+  "git_sha": "88406ae",
+  "per_session_rate": {
+    "tier1.cd": {
+      "agent": 0.3333333333333333,
+      "conductor": 5.0,
+      "master": 0.0
+    },
+    "tier1.env": {
+      "agent": 0.1111111111111111,
+      "conductor": 0.0,
+      "master": 0.0
+    },
+    "tier1.git_switch": {
+      "agent": 0.1111111111111111,
+      "conductor": 0.0,
+      "master": 0.0
+    },
+    "tier2.env_check": {
+      "agent": 0.0,
+      "conductor": 0.0,
+      "master": 0.0
+    },
+    "tier2.git_status": {
+      "agent": 0.1111111111111111,
+      "conductor": 1.0,
+      "master": 1.0
+    },
+    "tier2.pwd": {
+      "agent": 0.0,
+      "conductor": 0.0,
+      "master": 0.0
+    }
+  },
+  "phase": "before",
+  "schema_version": 1,
+  "tier1": {
+    "cd": {
+      "agent": 3,
+      "conductor": 10,
+      "master": 0,
+      "total": 13
+    },
+    "env": {
+      "agent": 1,
+      "conductor": 0,
+      "master": 0,
+      "total": 1
+    },
+    "git_switch": {
+      "agent": 1,
+      "conductor": 0,
+      "master": 0,
+      "total": 1
+    }
+  },
+  "tier2": {
+    "env_check": {
+      "agent": 0,
+      "conductor": 0,
+      "master": 0,
+      "total": 0
+    },
+    "git_status": {
+      "agent": 1,
+      "conductor": 2,
+      "master": 1,
+      "total": 4
+    },
+    "pwd": {
+      "agent": 0,
+      "conductor": 0,
+      "master": 0,
+      "total": 0
+    }
+  },
+  "tier3": {
+    "by_model_role": [
+      {
+        "avg_duration_ms": 959.7727272727273,
+        "avg_input": 204.5909090909091,
+        "avg_output": 11.204545454545455,
+        "model": "claude-haiku-4-5-20251001",
+        "role": "agent",
+        "tasks": 6
+      },
+      {
+        "avg_duration_ms": 13039.184713375796,
+        "avg_input": 37.868365180467094,
+        "avg_output": 853.9872611464968,
+        "model": "claude-opus-4-7",
+        "role": "agent",
+        "tasks": 7
+      },
+      {
+        "avg_duration_ms": 14346.19642857143,
+        "avg_input": 1.0,
+        "avg_output": 901.6964285714286,
+        "model": "claude-opus-4-7",
+        "role": "conductor",
+        "tasks": 2
+      }
+    ],
+    "by_role": [
+      {
+        "avg_cache_create": 3787.918446601942,
+        "avg_cache_read": 80555.98446601942,
+        "avg_duration_ms": 12007.157281553398,
+        "avg_input": 52.112621359223304,
+        "avg_output": 781.9825242718447,
+        "role": "agent",
+        "tasks": 7
+      },
+      {
+        "avg_cache_create": 1853.767857142857,
+        "avg_cache_read": 94924.17857142857,
+        "avg_duration_ms": 14346.19642857143,
+        "avg_input": 1.0,
+        "avg_output": 901.6964285714286,
+        "role": "conductor",
+        "tasks": 2
+      }
+    ]
+  },
+  "totals": {
+    "bash_calls": 164,
+    "sessions": 12,
+    "sessions_by_role": {
+      "agent": 9,
+      "conductor": 2,
+      "master": 1
+    },
+    "tasks": 0,
+    "tool_calls": 323
+  },
+  "window": {
+    "since": "2026-05-02",
+    "until": "2026-05-03"
+  }
+}

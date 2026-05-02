@@ -1,0 +1,290 @@
+<!doctype html>
+<html lang="ja">
+<head>
+  <meta charset="utf-8">
+  <title>ctxd baseline report — before</title>
+  <style>
+:root { color-scheme: light; }
+* { box-sizing: border-box; }
+body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+  background: #fff; color: #222; margin: 0; padding: 24px;
+  max-width: 1200px; margin-left: auto; margin-right: auto; }
+h1, h2, h3 { margin-top: 0; }
+h2 { margin: 32px 0 4px; font-size: 18px; border-bottom: 1px solid #ddd;
+  padding-bottom: 4px; }
+h3 { margin: 20px 0 6px; font-size: 14px; color: #444; }
+.blurb { color: #666; font-size: 13px; margin: 4px 0 12px; }
+.report-header { display: grid; grid-template-columns: auto 1fr auto;
+  gap: 24px; align-items: center; padding: 16px; background: #f8f9fa;
+  border: 1px solid #e1e4e8; border-radius: 6px; }
+.phase-badge { font-size: 36px; font-weight: 800; padding: 8px 20px;
+  border-radius: 6px; letter-spacing: 0.06em; }
+.phase-badge.phase-before { background: #fff3bf; color: #5c3d00; }
+.phase-badge.phase-after { background: #d4edda; color: #155724; }
+.header-meta .row { font-size: 13px; margin: 2px 0; }
+.header-meta .label { display: inline-block; min-width: 110px;
+  color: #666; font-weight: 600; }
+.totals-grid { display: grid; grid-template-columns: repeat(4, auto);
+  gap: 12px 18px; }
+.totals-grid > div { display: flex; flex-direction: column; align-items: center;
+  padding: 4px 8px; }
+.totals-grid .big { font-size: 22px; font-weight: 700; color: #0366d6; }
+.totals-grid span:not(.big) { font-size: 11px; color: #666;
+  text-transform: uppercase; letter-spacing: 0.05em; }
+section.tier { margin-top: 28px; }
+table.tier-table { border-collapse: collapse; width: 100%; font-size: 13px;
+  table-layout: auto; }
+table.tier-table th, table.tier-table td { border: 1px solid #e1e4e8;
+  padding: 6px 8px; text-align: left; vertical-align: middle; }
+table.tier-table thead th { background: #f5f5f5; font-weight: 600;
+  font-size: 12px; }
+table.tier-table th.cat { width: 24%; font-weight: 500; }
+table.tier-table .num { text-align: right; font-variant-numeric: tabular-nums;
+  font-family: ui-monospace, "SF Mono", Menlo, monospace; }
+table.tier-table .rate { text-align: right; font-variant-numeric: tabular-nums;
+  font-family: ui-monospace, "SF Mono", Menlo, monospace; font-size: 12px; }
+table.tier-table .agent { background: #f6fbfe; }
+table.tier-table .total { background: #f9f9f9; font-weight: 600; }
+table.tier-table .empty { color: #888; font-style: italic; text-align: center; }
+.bar-cell { width: 28%; }
+.bar-track { background: #eee; border-radius: 2px; height: 16px;
+  overflow: hidden; }
+.bar-fill { height: 100%; }
+.report-footer { margin-top: 32px; padding-top: 12px;
+  border-top: 1px solid #ddd; display: flex; gap: 18px; flex-wrap: wrap;
+  font-size: 11px; color: #666;
+  font-family: ui-monospace, "SF Mono", Menlo, monospace; }
+</style>
+</head>
+<body>
+  <h1>ctxd baseline report</h1>
+
+<header class="report-header">
+  <div class="phase-badge phase-before">BEFORE</div>
+  <div class="header-meta">
+    <div class="row"><span class="label">window</span>
+      <span>2026-05-02 &le; t &lt; 2026-05-03</span></div>
+    <div class="row"><span class="label">repo</span>
+      <span>ctxd repo (.team/traces/traces.db)</span></div>
+    <div class="row"><span class="label">model bucket</span>
+      <span>claude-haiku-4-5-20251001, claude-opus-4-7</span></div>
+  </div>
+  <div class="totals-grid">
+    <div><span class="big">12</span><span>sessions</span></div>
+    <div><span class="big">0</span><span>tasks</span></div>
+    <div><span class="big">323</span><span>tool_calls</span></div>
+    <div><span class="big">164</span><span>bash_calls</span></div>
+  </div>
+</header>
+
+
+<section class="tier">
+  <h2>Tier 1: 直接置換指標</h2>
+  <p class="blurb">ctxd の chdir / git-switch / env-set で直接置換できる raw bash の出現頻度。</p>
+  <table class="tier-table">
+    <thead>
+      <tr>
+        <th>category</th>
+        <th class="num">total</th>
+        <th>distribution</th>
+        <th class="num">agent</th>
+        <th class="num">conductor</th>
+        <th class="num">master</th>
+        <th>agent / session</th>
+        <th>conductor / session</th>
+        <th>master / session</th>
+      </tr>
+    </thead>
+    <tbody>
+      
+<tr>
+  <th class="cat">cd (incl. compound)</th>
+  <td class="num total">13</td>
+  <td class="bar-cell"><div class="bar-track"><div class="bar-fill" style="width: 100%; background: #28a745;"></div></div></td>
+  <td class="num agent"><strong>3</strong></td>
+  <td class="num">10</td>
+  <td class="num">0</td>
+  <td class="rate agent"><strong>0.33 / session</strong></td>
+  <td class="rate">5.00 / session</td>
+  <td class="rate">0.00 / session</td>
+</tr>
+
+<tr>
+  <th class="cat">git checkout / git switch</th>
+  <td class="num total">1</td>
+  <td class="bar-cell"><div class="bar-track"><div class="bar-fill" style="width: 8%; background: #28a745;"></div></div></td>
+  <td class="num agent"><strong>1</strong></td>
+  <td class="num">0</td>
+  <td class="num">0</td>
+  <td class="rate agent"><strong>0.11 / session</strong></td>
+  <td class="rate">0.00 / session</td>
+  <td class="rate">0.00 / session</td>
+</tr>
+
+<tr>
+  <th class="cat">export / unset</th>
+  <td class="num total">1</td>
+  <td class="bar-cell"><div class="bar-track"><div class="bar-fill" style="width: 8%; background: #28a745;"></div></div></td>
+  <td class="num agent"><strong>1</strong></td>
+  <td class="num">0</td>
+  <td class="num">0</td>
+  <td class="rate agent"><strong>0.11 / session</strong></td>
+  <td class="rate">0.00 / session</td>
+  <td class="rate">0.00 / session</td>
+</tr>
+
+    </tbody>
+  </table>
+</section>
+
+
+<section class="tier">
+  <h2>Tier 2: 波及指標</h2>
+  <p class="blurb">ctxd の JSON envelope で代替できる確認系コマンド。Tier 1 との重複は計上しない。</p>
+  <table class="tier-table">
+    <thead>
+      <tr>
+        <th>category</th>
+        <th class="num">total</th>
+        <th>distribution</th>
+        <th class="num">agent</th>
+        <th class="num">conductor</th>
+        <th class="num">master</th>
+        <th>agent / session</th>
+        <th>conductor / session</th>
+        <th>master / session</th>
+      </tr>
+    </thead>
+    <tbody>
+      
+<tr>
+  <th class="cat">pwd (standalone)</th>
+  <td class="num total">0</td>
+  <td class="bar-cell"><div class="bar-track"><div class="bar-fill" style="width: 0%; background: #28a745;"></div></div></td>
+  <td class="num agent"><strong>0</strong></td>
+  <td class="num">0</td>
+  <td class="num">0</td>
+  <td class="rate agent"><strong>0.00 / session</strong></td>
+  <td class="rate">0.00 / session</td>
+  <td class="rate">0.00 / session</td>
+</tr>
+
+<tr>
+  <th class="cat">git status / branch --show-current / rev-parse --abbrev-ref</th>
+  <td class="num total">4</td>
+  <td class="bar-cell"><div class="bar-track"><div class="bar-fill" style="width: 100%; background: #28a745;"></div></div></td>
+  <td class="num agent"><strong>1</strong></td>
+  <td class="num">2</td>
+  <td class="num">1</td>
+  <td class="rate agent"><strong>0.11 / session</strong></td>
+  <td class="rate">1.00 / session</td>
+  <td class="rate">1.00 / session</td>
+</tr>
+
+<tr>
+  <th class="cat">printenv / echo $... / env | ...</th>
+  <td class="num total">0</td>
+  <td class="bar-cell"><div class="bar-track"><div class="bar-fill" style="width: 0%; background: #28a745;"></div></div></td>
+  <td class="num agent"><strong>0</strong></td>
+  <td class="num">0</td>
+  <td class="num">0</td>
+  <td class="rate agent"><strong>0.00 / session</strong></td>
+  <td class="rate">0.00 / session</td>
+  <td class="rate">0.00 / session</td>
+</tr>
+
+    </tbody>
+  </table>
+</section>
+
+
+<section class="tier">
+  <h2>Tier 3: 副作用指標</h2>
+  <p class="blurb">api_usage を role / model bucket 別に集計。null は '–' 表示。</p>
+  <h3>by role (1 task あたり avg)</h3>
+  <table class="tier-table">
+    <thead>
+      <tr>
+        <th>role</th>
+        <th class="num">tasks</th>
+        <th class="num">avg_input</th>
+        <th class="num">avg_output</th>
+        <th class="num">avg_cache_create</th>
+        <th class="num">avg_cache_read</th>
+        <th class="num">avg_duration_ms</th>
+      </tr>
+    </thead>
+    <tbody>
+      
+<tr>
+  <th>agent</th>
+  <td class="num">7</td>
+  <td class="num">52.1</td>
+  <td class="num">782.0</td>
+  <td class="num">3787.9</td>
+  <td class="num">80556.0</td>
+  <td class="num">12007.2</td>
+</tr>
+<tr>
+  <th>conductor</th>
+  <td class="num">2</td>
+  <td class="num">1.0</td>
+  <td class="num">901.7</td>
+  <td class="num">1853.8</td>
+  <td class="num">94924.2</td>
+  <td class="num">14346.2</td>
+</tr>
+    </tbody>
+  </table>
+  <h3>by model &times; role</h3>
+  <table class="tier-table">
+    <thead>
+      <tr>
+        <th>model</th>
+        <th>role</th>
+        <th class="num">tasks</th>
+        <th class="num">avg_input</th>
+        <th class="num">avg_output</th>
+        <th class="num">avg_duration_ms</th>
+      </tr>
+    </thead>
+    <tbody>
+      
+<tr>
+  <th>claude-haiku-4-5-20251001</th>
+  <td>agent</td>
+  <td class="num">6</td>
+  <td class="num">204.6</td>
+  <td class="num">11.2</td>
+  <td class="num">959.8</td>
+</tr>
+<tr>
+  <th>claude-opus-4-7</th>
+  <td>agent</td>
+  <td class="num">7</td>
+  <td class="num">37.9</td>
+  <td class="num">854.0</td>
+  <td class="num">13039.2</td>
+</tr>
+<tr>
+  <th>claude-opus-4-7</th>
+  <td>conductor</td>
+  <td class="num">2</td>
+  <td class="num">1.0</td>
+  <td class="num">901.7</td>
+  <td class="num">14346.2</td>
+</tr>
+    </tbody>
+  </table>
+</section>
+
+
+<footer class="report-footer">
+  <span>schema_version=1</span>
+  <span>generated_at=2026-05-02T00:00:00Z</span>
+  <span>git_sha=88406ae</span>
+  <span>phase=before</span>
+</footer>
+
+</body>
+</html>
