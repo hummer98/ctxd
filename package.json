@@ -1,0 +1,36 @@
+{
+  "name": "@hummer98/ctxd-claude-plugin",
+  "version": "0.2.0",
+  "description": "Declarative companion to shell state mutations (cd, export, git checkout/switch). Emits structured JSON describing cwd, env, and git state.",
+  "license": "Apache-2.0",
+  "author": {
+    "name": "Yuji Yamamoto",
+    "email": "yuji.yamamoto@tayorie.jp"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/hummer98/ctxd.git"
+  },
+  "homepage": "https://github.com/hummer98/ctxd#readme",
+  "bugs": {
+    "url": "https://github.com/hummer98/ctxd/issues"
+  },
+  "keywords": [
+    "claude",
+    "claude-code",
+    "claude-plugin",
+    "skill",
+    "shell",
+    "cwd",
+    "git",
+    "context"
+  ],
+  "files": [
+    ".claude-plugin/plugin.json",
+    "skills/ctxd/",
+    "LICENSE"
+  ],
+  "publishConfig": {
+    "access": "public"
+  }
+}

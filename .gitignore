@@ -23,3 +23,7 @@ evals/results/*/session-*.settings.json
 # Python bytecode (mainly from evals/summarize.py)
 __pycache__/
 *.pyc
+
+# npm
+node_modules/
+*.tgz

@@ -40,8 +40,58 @@
 | 対象 | 真のソース |
 | --- | --- |
 | プラグイン version / name / description | `.claude-plugin/plugin.json` |
+| npm package version (`package.json`) | `.claude-plugin/plugin.json` (`scripts/sync-package-version.sh` で同期) |
 | Skill 本文 / when-to-use | `skills/ctxd/SKILL.md` |
 | ctxd CLI version | `cmd/ctxd/main.go` の `var version` (build 時 `-ldflags -X main.version=...` で上書き)。tag は `.claude-plugin/plugin.json` の `version` と同期する (1 tag = 1 plugin version = 1 CLI version)。release ops の詳細は T030 で別途記録。 |
+
+## plugin の npm publish 手順
+
+`@hummer98/ctxd-claude-plugin` を npm に publish するときの手順。
+
+> **このセクションの手動手順は bootstrap (初回 publish v0.2.0) 用 + 緊急時の fallback**。通常運用では publish は CI 経由 (OIDC trusted publisher; T029 で `.github/workflows/release.yml` 整備) で行う。
+>
+> **bootstrap publish 自体は T027 の直後に別 surface で user (yamamoto) 監視下に実行する**。T027 (本ファイルでこのセクションを書いたタスク) は publish 経路の整備 (LICENSE / package.json / sync スクリプト / dry-run 検証) までで完了し、実 publish はしない。
+
+なお `.claude-plugin/plugin.json` の `name` (`ctxd`) は Claude plugin の内部 ID、npm package の `name` (`@hummer98/ctxd-claude-plugin`) は npm registry 上の配布名であり、両者は別名前空間で管理する。npm package name は本セクションの「真のソースの位置」表外で固定 (rename には npm 上の package 移行作業を伴うので軽率に変えない)。
+
+### bootstrap publish 手順 (T027 直後に user が別 surface で 1 回だけ実行)
+
+1. `npm whoami` で `hummer98` でログイン済みか確認
+2. `cd <ctxd repo root>` (worktree でも main checkout でも OK、ただし v0.2.0 のファイル群が揃った state で行う)
+3. `bash scripts/sync-package-version.sh` で `package.json` の version を `.claude-plugin/plugin.json` と一致させる (既に一致なら no-op)
+4. `npm publish --access public --dry-run` で tarball 内容を確認 (6 ファイル: `.claude-plugin/plugin.json`, `skills/ctxd/SKILL.md`, `LICENSE`, `README.md`, `README.ja.md`, `package.json`。forbidden パターン: `cmd/`, `internal/`, `go.{mod,sum}`, `evals/`, `.team/`, `.worktrees/`, `.claude/`, `docs/`, `CLAUDE.md`, `scripts/` が含まれていないこと)
+5. `npm publish --access public` で本 publish (2FA OTP 要求があれば `--otp=<6桁>` を付与)
+6. `npm view @hummer98/ctxd-claude-plugin version` で `0.2.0` が返ることを確認
+7. (任意) `claude plugins:install @hummer98/ctxd-claude-plugin` で動作確認
+
+### bootstrap 完了後 / T029 着手前に user が行う設定 (trusted publisher)
+
+T029 で `.github/workflows/release.yml` を整備する前に、user は npmjs.com 上で以下を設定しておくこと:
+
+1. https://www.npmjs.com/package/@hummer98/ctxd-claude-plugin → Settings → Trusted Publishers
+2. Provider: GitHub Actions
+3. Organization or user: `hummer98`
+4. Repository: `ctxd`
+5. Workflow filename: `release.yml`
+6. Environment name (推奨): `release`
+
+これが未設定のまま T029 の CI が `npm publish` を試みると OIDC token を受け付けず failed publish になる。
+
+### 通常運用 (T029 完了後)
+
+通常の version bump リリースは以下:
+
+1. `.claude-plugin/plugin.json` の `version` を semver で bump (CLAUDE.md 既存ルール)
+2. `bash scripts/sync-package-version.sh` で `package.json` を同期
+3. commit / push / `git tag v<X.Y.Z>` / `git push --tags`
+4. tag push で T029 の CI workflow (`release.yml`) が `npm publish` を OIDC で実行
+5. `npm view @hummer98/ctxd-claude-plugin version` で新 version を確認
+
+publish 後 24 時間以内のみ `npm unpublish @hummer98/ctxd-claude-plugin@<X.Y.Z>` で取り消し可。それ以降は `npm deprecate` で警告を付けるのみ。dry-run で必ず内容を確認すること。
+
+`description` は `.claude-plugin/plugin.json` と `package.json` で手動で揃える (現状自動同期はしない)。SKILL.md / plugin.json の description を変えるときは package.json の description も合わせて更新すること。
+
+本 repo はメインが Go プロジェクトだが、plugin 配布のために repo ルートに `package.json` を置いている。`npm install` を実行しても dependencies がないため副作用は空 `node_modules/` が作られるだけで実害はないが、Go 側の作業では基本的に `npm` コマンドは不要。
 
 ## 計測結果の commit 方針
 
