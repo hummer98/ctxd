@@ -1,0 +1,93 @@
+name: Release
+
+on:
+  push:
+    tags: ['v*']
+  workflow_dispatch:
+
+permissions:
+  contents: write
+  id-token: write
+
+jobs:
+  publish-plugin:
+    name: Publish plugin to npm (OIDC)
+    runs-on: ubuntu-latest
+    environment: release
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          registry-url: https://registry.npmjs.org
+
+      - name: Sync package.json with plugin.json
+        run: bash scripts/sync-package-version.sh
+
+      - name: Verify version sync (plugin.json == package.json == tag)
+        run: |
+          PLUGIN_VER=$(jq -r .version .claude-plugin/plugin.json)
+          PKG_VER=$(jq -r .version package.json)
+          TAG_VER="${GITHUB_REF_NAME#v}"
+          echo "plugin.json=$PLUGIN_VER package.json=$PKG_VER tag=$TAG_VER"
+          [ "$PLUGIN_VER" = "$PKG_VER" ] || { echo "ERROR: plugin.json/package.json mismatch"; exit 1; }
+          [ "$PLUGIN_VER" = "$TAG_VER" ] || { echo "ERROR: tag/plugin.json mismatch"; exit 1; }
+
+      - name: Publish to npm with provenance (OIDC)
+        run: |
+          sed -i '/_authToken/d' "$NPM_CONFIG_USERCONFIG" 2>/dev/null || true
+          npm publish --provenance --access public
+
+  publish-cli:
+    name: Build & publish Go CLI (goreleaser)
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Setup Go
+        uses: actions/setup-go@v5
+        with:
+          go-version: '1.26'
+
+      - name: goreleaser release
+        uses: goreleaser/goreleaser-action@v6
+        with:
+          version: latest
+          args: release --clean
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          HOMEBREW_TAP_TOKEN: ${{ secrets.HOMEBREW_TAP_TOKEN }}
+
+  github-release:
+    name: Update GitHub Release notes from CHANGELOG.md
+    runs-on: ubuntu-latest
+    needs: [publish-plugin, publish-cli]
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Extract release notes and update GitHub Release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          VERSION="${GITHUB_REF_NAME#v}"
+          NOTES=$(awk -v ver="$VERSION" '
+            $0 ~ "^## \\[" ver "\\]" { found=1; next }
+            /^## \[/ { if (found) exit }
+            found
+          ' CHANGELOG.md)
+          if [ -z "$NOTES" ]; then
+            echo "ERROR: no [${VERSION}] section in CHANGELOG.md"
+            exit 1
+          fi
+          if gh release view "$GITHUB_REF_NAME" >/dev/null 2>&1; then
+            gh release edit "$GITHUB_REF_NAME" --notes "$NOTES"
+          else
+            gh release create "$GITHUB_REF_NAME" --title "$GITHUB_REF_NAME" --notes "$NOTES"
+          fi
