@@ -48,8 +48,10 @@ CREATE TABLE api_usage (
   cache_creation_input_tokens INTEGER,
   cache_read_input_tokens INTEGER,
   stop_reason TEXT,
-  duration_ms INTEGER
-  -- (rate limit 列省略)
+  duration_ms INTEGER,
+  -- 以下 12 列 + error は本 spec の Tier 3 SQL では参照しないため省略:
+  --   ratelimit_{tokens,input_tokens,output_tokens,requests}_{remaining,limit,reset}
+  --   error
 );
 
 CREATE TABLE task_sessions (
@@ -290,6 +292,9 @@ done
 
 [[ "$PHASE" =~ ^(before|after)$ ]] || { echo "phase must be before|after" >&2; exit 1; }
 
+# DATE は出力ファイル名に使う実行日。実装側 (extract_baseline.py) では集計 window の "until" は
+# --until 引数または DB の MAX(timestamp) 由来で決まり、ここの実行日とは独立。
+# 2 回実行で同 hash を期待する場合は SOURCE_DATE_EPOCH を export する (§4.2 補足参照)。
 DATE="$(date +%Y%m%d)"
 DATA_JSON="$OUT_DIR/data-${PHASE}-${DATE}.json"
 HTML_OUT="$OUT_DIR/cmux-team-${PHASE}-${DATE}.html"
@@ -326,7 +331,8 @@ echo "wrote: $DATA_JSON"
     "sessions": 142,
     "tasks": 28,
     "tool_calls": 1468,
-    "bash_calls": 188
+    "bash_calls": 188,
+    "sessions_by_role": { "agent": 95, "conductor": 30, "master": 17 } // per_session_rate の denominator
   },
   "tier1": {
     "cd":         { "agent": 12, "conductor": 3, "master": 5, "total": 20 },
@@ -351,6 +357,12 @@ echo "wrote: $DATA_JSON"
   }
 }
 ```
+
+補足:
+
+- `totals.sessions_by_role.<role>` は `per_session_rate.<key>.<role>` の denominator として使う。schema_version=1 では `agent` / `conductor` / `master` の 3 role を必ずキーに含め、観測 0 の role は `0` を入れる (キーごと省略しない)
+- `sessions_by_role.<role> == 0` のとき、当該 role の `per_session_rate.<key>.<role>` は `null` を返す (divide-by-zero フォールバック)。0 ではなく `null` にすることで「観測なし」と「ヒット 0 件」を区別する
+- `generated_at` は `SOURCE_DATE_EPOCH` 環境変数 (UNIX epoch 秒) が設定されている場合のみ deterministic (reproducible-builds.org 規約)。未設定だと `datetime.now(UTC)` が入るため、2 回実行で hash 一致を期待する場合は caller が `SOURCE_DATE_EPOCH` を export する必要がある。CI / 比較ページ生成側で固定したい場合に opt-in で使う
 
 ### 4.3 完了条件
 

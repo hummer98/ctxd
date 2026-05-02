@@ -93,6 +93,7 @@ ctxd 投入で全体が遅く / 重くならないかを確認する保険指標
 2. **After 計測のタイミング**: ctxd 投入後すぐ計測すると "新ツール慣れ" のノイズが入る。投入から **2 週間以上**経過、かつ Bash tool 呼び出しが Before と同オーダー以上になってから取る、を運用ルールにする
 3. **匿名化**: `tool_input.command` には ctxd repo 内の作業内容が生で入る。HTML レポートを公開 commit するなら top-N 例の表示でセンシティブ情報が出ないか確認が必要。**初版ではドリルダウン UI を出さず集計値のみ表示**にして、公開許容範囲を最小化
 4. **claude code バージョン分離**: api_usage の model 列で bucket するだけで足りるか、claude code CLI バージョン (`claude --version`) も記録列に含めるか。spec の中で要検討
+5. **schema_version=1 の追補項目**: `per_session_rate` の `null` 表現 (sessions_by_role の denominator が 0 の場合) と `SOURCE_DATE_EPOCH` による `generated_at` 冪等性 opt-in は、schema_version を bump せずに `docs/measurement-baseline-spec.md` §4.2 補足 / §4.1 shell コメントで追補済 (T033)。schema_version=2 を切る判断はこれらが破壊的変更を要するときに改めて行う
 
 ## 参考
 
