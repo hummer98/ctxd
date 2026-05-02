@@ -1,0 +1,436 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <title>ctxd eval report</title>
+  <script src="https://cdn.jsdelivr.net/npm/chart.js@4"></script>
+  <style>
+    :root { color-scheme: light; }
+    body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; background: #fff; color: #222; margin: 0; padding: 24px; }
+    h1 { margin: 0 0 8px; font-size: 22px; }
+    h2 { margin: 24px 0 8px; font-size: 18px; border-bottom: 1px solid #eee; padding-bottom: 4px; }
+    .note { color: #666; font-size: 13px; margin: 4px 0 12px; }
+    header.report-header { display: flex; flex-wrap: wrap; gap: 24px; align-items: baseline; padding-bottom: 12px; border-bottom: 1px solid #ddd; }
+    .big-rate { font-size: 48px; font-weight: 700; color: #28a745; line-height: 1; }
+    .big-rate.low { color: #d73a49; }
+    .big-rate.mid { color: #d9a800; }
+    .meta, .totals { font-size: 13px; color: #555; }
+    section { margin-top: 24px; }
+    canvas { max-width: 100%; }
+    .chart-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
+    .chart-grid > div { min-height: 220px; }
+    table { border-collapse: collapse; width: 100%; font-size: 12px; }
+    th, td { border: 1px solid #ddd; padding: 4px 6px; text-align: left; vertical-align: top; }
+    th { background: #f5f5f5; cursor: pointer; user-select: none; position: sticky; top: 0; }
+    th[data-sort]::after { content: ""; }
+    th[data-sort].sort-asc::after { content: " \25B2"; color: #888; }
+    th[data-sort].sort-desc::after { content: " \25BC"; color: #888; }
+    tbody tr.adopted { font-weight: 600; }
+    tr.cv-2-1-119 { background: #f0f4f8; }
+    tr.cv-2-1-121 { background: #f0f8f4; }
+    tr.cv-2-1-122 { background: #f8f4f0; }
+    tr.cv-2-1-123 { background: #f4f0f8; }
+    .heatmap-table td { text-align: center; min-width: 64px; }
+    .heatmap-table td.missing { background: #ccc; color: #555; font-style: italic; }
+    .toggle-row { margin: 8px 0; font-size: 13px; }
+    .nodata { color: #888; font-style: italic; padding: 12px; text-align: center; }
+    .row-summary { font-family: ui-monospace, "SF Mono", Menlo, monospace; font-size: 11px; color: #444; }
+    a.run-link { color: #0366d6; text-decoration: none; }
+    a.run-link:hover { text-decoration: underline; }
+  </style>
+</head>
+<body>
+  <header class="report-header">
+    <div>
+      <h1>ctxd eval report</h1>
+      <div class="totals" id="totals"></div>
+    </div>
+    <div>
+      <div class="big-rate" id="latest-rate">--</div>
+      <div class="meta" id="latest-meta"></div>
+    </div>
+  </header>
+
+  <section id="block1-adherence">
+    <h2>Adherence over plugin versions</h2>
+    <p class="note">Bar = adopted run per version (5 scenarios complete, no harness-aborted, latest timestamp). Toggle to overlay non-adopted runs as faded markers.</p>
+    <label class="toggle-row"><input type="checkbox" id="show-non-adopted"> show non-adopted runs</label>
+    <div style="height: 320px;"><canvas id="chart-adherence"></canvas></div>
+    <p class="note" id="adherence-fallback" style="display:none;">No adopted run yet — every CSV row is missing scenarios or contains harness-aborted.</p>
+  </section>
+
+  <section id="block2-heatmap">
+    <h2>Scenario x Version Heatmap</h2>
+    <p class="note">adopted run per_scenario_rates. Grey = scenario missing or harness-aborted.</p>
+    <table class="heatmap-table" id="heatmap-table"></table>
+  </section>
+
+  <section id="block3-efficiency">
+    <h2>Efficiency Trend</h2>
+    <p class="note" id="efficiency-note"></p>
+    <div class="chart-grid">
+      <div><canvas id="chart-eff-tools"></canvas></div>
+      <div><canvas id="chart-eff-in"></canvas></div>
+      <div><canvas id="chart-eff-out"></canvas></div>
+      <div><canvas id="chart-eff-wall"></canvas></div>
+    </div>
+    <p class="nodata" id="efficiency-nodata" style="display:none;">No runs with efficiency data yet.</p>
+  </section>
+
+  <section id="block4-runs">
+    <h2>Run Index</h2>
+    <p class="note">Click headers to sort. Bold rows are adopted per their plugin version. Row backgrounds reflect claude_version.</p>
+    <div style="overflow:auto; max-height: 70vh;">
+      <table id="runs-table">
+        <thead>
+          <tr>
+            <th data-sort="timestamp">timestamp</th>
+            <th>model</th>
+            <th data-sort="plugin_version">plugin_version</th>
+            <th data-sort="claude_version">claude_version</th>
+            <th>git_sha</th>
+            <th data-sort="overall_rate">overall_rate</th>
+            <th>per_scenario_rates</th>
+            <th data-sort="avg_tool_uses">avg_tool_uses</th>
+            <th data-sort="avg_input_tokens">avg_input_tokens</th>
+            <th data-sort="avg_output_tokens">avg_output_tokens</th>
+            <th data-sort="avg_wall_ms">avg_wall_ms</th>
+          </tr>
+        </thead>
+        <tbody></tbody>
+      </table>
+    </div>
+  </section>
+
+  <script id="report-data" type="application/json">
+{"generated_at":"2026-05-02T09:57:32Z","scenarios":["chdir-01","chdir-02","git-switch-01","git-switch-02","env-set-01"],"version_notes":{"0.1.0":"Initial baseline; hook-based harness landed (T013–T015)","0.1.1":"SKILL.md trigger reinforced (description, ❌→✅ examples) (T016)","0.1.2":"disambiguation + NEVER phrasing + Precondition section (T017)","0.1.3":"pattern matcher tightened + scenario setup hooks + plugin author (T018)","0.2.0":"SKILL.md Postcondition section rewritten to match T010 final implementation (`--expect` DSL + Result.Data preserved on failure) (T023)"},"efficiency_note":"Pre-T024 runs; raw session JSONL was git-ignored and pruned, so retroactive efficiency numbers are unavailable.","adopted_by_version":{"0.1.2":"20260427-160126","0.1.3":"20260428-122400","0.1.0":"20260427-072248","0.1.1":"20260427-115756","0.2.0":"20260430-111327"},"latest_run":{"timestamp":"20260430-111327","model":"claude-opus-4-7","plugin_version":"0.2.0","claude_version":"2.1.123 (Claude Code)","git_sha":"029bb7e","overall_rate":80.0,"per_scenario_rates":{"chdir-01":1.0,"chdir-02":1.0,"git-switch-01":0.0,"git-switch-02":1.0,"env-set-01":1.0},"efficiency":{"avg_tool_uses":3,"avg_input_tokens":23,"avg_output_tokens":1929,"avg_wall_ms":25600},"adopted":true,"full_five":true,"has_aborted":false},"runs":[{"timestamp":"20260427-040930","model":"claude-opus-4-7","plugin_version":"0.1.0","claude_version":"2.1.119 (Claude Code)","git_sha":"7a95621","overall_rate":0.0,"per_scenario_rates":{"chdir-01":0.0,"chdir-02":0.0,"git-switch-01":0.0,"git-switch-02":0.0,"env-set-01":0.0},"efficiency":{"avg_tool_uses":null,"avg_input_tokens":null,"avg_output_tokens":null,"avg_wall_ms":null},"adopted":false,"full_five":true,"has_aborted":false},{"timestamp":"20260427-071810","model":"claude-opus-4-7","plugin_version":"0.1.0","claude_version":"2.1.119 (Claude Code)","git_sha":"9cf68f9","overall_rate":0.0,"per_scenario_rates":{"chdir-01":0.0,"chdir-02":0.0,"git-switch-01":0.0,"git-switch-02":0.0,"env-set-01":0.0},"efficiency":{"avg_tool_uses":null,"avg_input_tokens":null,"avg_output_tokens":null,"avg_wall_ms":null},"adopted":false,"full_five":true,"has_aborted":false},{"timestamp":"20260427-072248","model":"claude-opus-4-7","plugin_version":"0.1.0","claude_version":"2.1.119 (Claude Code)","git_sha":"9cf68f9","overall_rate":0.0,"per_scenario_rates":{"chdir-01":0.0,"chdir-02":0.0,"git-switch-01":0.0,"git-switch-02":0.0,"env-set-01":0.0},"efficiency":{"avg_tool_uses":null,"avg_input_tokens":null,"avg_output_tokens":null,"avg_wall_ms":null},"adopted":true,"full_five":true,"has_aborted":false},{"timestamp":"20260427-115434","model":"claude-opus-4-7","plugin_version":"0.1.1","claude_version":"2.1.119 (Claude Code)","git_sha":"37d33d9","overall_rate":20.0,"per_scenario_rates":{"chdir-01":0.0,"chdir-02":0.0,"git-switch-01":0.0,"git-switch-02":0.0,"env-set-01":1.0},"efficiency":{"avg_tool_uses":null,"avg_input_tokens":null,"avg_output_tokens":null,"avg_wall_ms":null},"adopted":false,"full_five":true,"has_aborted":false},{"timestamp":"20260427-115756","model":"claude-opus-4-7","plugin_version":"0.1.1","claude_version":"2.1.119 (Claude Code)","git_sha":"37d33d9","overall_rate":6.7,"per_scenario_rates":{"chdir-01":0.0,"chdir-02":0.0,"git-switch-01":0.0,"git-switch-02":0.0,"env-set-01":0.33},"efficiency":{"avg_tool_uses":null,"avg_input_tokens":null,"avg_output_tokens":null,"avg_wall_ms":null},"adopted":true,"full_five":true,"has_aborted":false},{"timestamp":"20260427-155915","model":"claude-opus-4-7","plugin_version":"0.1.2","claude_version":"2.1.119 (Claude Code)","git_sha":"e362a1d","overall_rate":0.0,"per_scenario_rates":{"chdir-01":0.0,"chdir-02":null,"git-switch-01":null,"git-switch-02":null,"env-set-01":null},"efficiency":{"avg_tool_uses":null,"avg_input_tokens":null,"avg_output_tokens":null,"avg_wall_ms":null},"adopted":false,"full_five":false,"has_aborted":false},{"timestamp":"20260427-160032","model":"claude-opus-4-7","plugin_version":"0.1.2","claude_version":"2.1.119 (Claude Code)","git_sha":"e362a1d","overall_rate":100.0,"per_scenario_rates":{"chdir-01":1.0,"chdir-02":null,"git-switch-01":null,"git-switch-02":null,"env-set-01":null},"efficiency":{"avg_tool_uses":null,"avg_input_tokens":null,"avg_output_tokens":null,"avg_wall_ms":null},"adopted":false,"full_five":false,"has_aborted":false},{"timestamp":"20260427-160126","model":"claude-opus-4-7","plugin_version":"0.1.2","claude_version":"2.1.119 (Claude Code)","git_sha":"e362a1d","overall_rate":53.3,"per_scenario_rates":{"chdir-01":0.67,"chdir-02":1.0,"git-switch-01":0.33,"git-switch-02":0.0,"env-set-01":0.67},"efficiency":{"avg_tool_uses":null,"avg_input_tokens":null,"avg_output_tokens":null,"avg_wall_ms":null},"adopted":true,"full_five":true,"has_aborted":false},{"timestamp":"20260427-233118","model":"claude-opus-4-7","plugin_version":"0.1.3","claude_version":"2.1.119 (Claude Code)","git_sha":"a043678","overall_rate":100.0,"per_scenario_rates":{"chdir-01":null,"chdir-02":null,"git-switch-01":null,"git-switch-02":1.0,"env-set-01":1.0},"efficiency":{"avg_tool_uses":null,"avg_input_tokens":null,"avg_output_tokens":null,"avg_wall_ms":null},"adopted":false,"full_five":false,"has_aborted":false},{"timestamp":"20260427-233247","model":"claude-opus-4-7","plugin_version":"0.1.3","claude_version":"2.1.119 (Claude Code)","git_sha":"a043678","overall_rate":100.0,"per_scenario_rates":{"chdir-01":1.0,"chdir-02":1.0,"git-switch-01":1.0,"git-switch-02":1.0,"env-set-01":1.0},"efficiency":{"avg_tool_uses":null,"avg_input_tokens":null,"avg_output_tokens":null,"avg_wall_ms":null},"adopted":false,"full_five":true,"has_aborted":false},{"timestamp":"20260428-040044","model":"claude-opus-4-7","plugin_version":"0.1.3","claude_version":"2.1.121 (Claude Code)","git_sha":"bb40eb2","overall_rate":96.8,"per_scenario_rates":{"chdir-01":1.0,"chdir-02":1.0,"git-switch-01":0.9,"git-switch-02":1.0,"env-set-01":null},"efficiency":{"avg_tool_uses":null,"avg_input_tokens":null,"avg_output_tokens":null,"avg_wall_ms":null},"adopted":false,"full_five":true,"has_aborted":true},{"timestamp":"20260428-042123","model":"claude-opus-4-7","plugin_version":"0.1.3","claude_version":"2.1.121 (Claude Code)","git_sha":"bb40eb2","overall_rate":98.0,"per_scenario_rates":{"chdir-01":1.0,"chdir-02":1.0,"git-switch-01":0.9,"git-switch-02":1.0,"env-set-01":1.0},"efficiency":{"avg_tool_uses":null,"avg_input_tokens":null,"avg_output_tokens":null,"avg_wall_ms":null},"adopted":false,"full_five":true,"has_aborted":false},{"timestamp":"20260428-054428","model":"claude-opus-4-7","plugin_version":"0.1.3","claude_version":"2.1.121 (Claude Code)","git_sha":"cf50a94","overall_rate":93.3,"per_scenario_rates":{"chdir-01":1.0,"chdir-02":0.67,"git-switch-01":1.0,"git-switch-02":1.0,"env-set-01":1.0},"efficiency":{"avg_tool_uses":null,"avg_input_tokens":null,"avg_output_tokens":null,"avg_wall_ms":null},"adopted":false,"full_five":true,"has_aborted":false},{"timestamp":"20260428-122400","model":"claude-opus-4-7","plugin_version":"0.1.3","claude_version":"2.1.121 (Claude Code)","git_sha":"cf50a94","overall_rate":100.0,"per_scenario_rates":{"chdir-01":1.0,"chdir-02":1.0,"git-switch-01":1.0,"git-switch-02":1.0,"env-set-01":1.0},"efficiency":{"avg_tool_uses":null,"avg_input_tokens":null,"avg_output_tokens":null,"avg_wall_ms":null},"adopted":true,"full_five":true,"has_aborted":false},{"timestamp":"20260429-022216","model":"claude-opus-4-7","plugin_version":"0.2.0","claude_version":"2.1.122 (Claude Code)","git_sha":"96a51fa","overall_rate":100.0,"per_scenario_rates":{"chdir-01":1.0,"chdir-02":1.0,"git-switch-01":1.0,"git-switch-02":1.0,"env-set-01":1.0},"efficiency":{"avg_tool_uses":null,"avg_input_tokens":null,"avg_output_tokens":null,"avg_wall_ms":null},"adopted":false,"full_five":true,"has_aborted":false},{"timestamp":"20260430-111327","model":"claude-opus-4-7","plugin_version":"0.2.0","claude_version":"2.1.123 (Claude Code)","git_sha":"029bb7e","overall_rate":80.0,"per_scenario_rates":{"chdir-01":1.0,"chdir-02":1.0,"git-switch-01":0.0,"git-switch-02":1.0,"env-set-01":1.0},"efficiency":{"avg_tool_uses":3,"avg_input_tokens":23,"avg_output_tokens":1929,"avg_wall_ms":25600},"adopted":true,"full_five":true,"has_aborted":false}]}
+  </script>
+  <script>
+  (function () {
+    const DATA = JSON.parse(document.getElementById('report-data').textContent);
+    const SCENARIOS = DATA.scenarios;
+    const VERSION_NOTES = DATA.version_notes || {};
+    const RUNS = DATA.runs || [];
+    const ADOPTED_BY_VERSION = DATA.adopted_by_version || {};
+
+    function tsToDate(ts) {
+      // "20260430-111327" -> "2026-04-30 11:13:27"
+      const m = /^(\d{4})(\d{2})(\d{2})-(\d{2})(\d{2})(\d{2})$/.exec(ts);
+      if (!m) return ts;
+      return `${m[1]}-${m[2]}-${m[3]} ${m[4]}:${m[5]}:${m[6]}`;
+    }
+
+    function escapeHtml(s) {
+      if (s == null) return '';
+      return String(s)
+        .replace(/&/g, '&amp;')
+        .replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;')
+        .replace(/"/g, '&quot;')
+        .replace(/'/g, '&#39;');
+    }
+
+    // --- Header ---
+    const latest = DATA.latest_run;
+    const rateEl = document.getElementById('latest-rate');
+    const metaEl = document.getElementById('latest-meta');
+    const totalsEl = document.getElementById('totals');
+    if (latest) {
+      const r = latest.overall_rate;
+      rateEl.textContent = (r === null) ? 'N/A' : `${r}%`;
+      if (typeof r === 'number') {
+        if (r < 50) rateEl.classList.add('low');
+        else if (r < 80) rateEl.classList.add('mid');
+      }
+      metaEl.textContent =
+        `plugin v${latest.plugin_version} / claude ${latest.claude_version} / sha ${latest.git_sha} / ${tsToDate(latest.timestamp)}`;
+    } else {
+      rateEl.textContent = 'N/A';
+      metaEl.textContent = 'no runs yet';
+    }
+    const versions = Array.from(new Set(RUNS.map(r => r.plugin_version))).sort();
+    const models = Array.from(new Set(RUNS.map(r => r.model)));
+    totalsEl.textContent = `${RUNS.length} run${RUNS.length === 1 ? '' : 's'} · ${versions.length} plugin version${versions.length === 1 ? '' : 's'} · model: ${models.join(', ') || 'n/a'}`;
+
+    // --- Block 1: Adherence ---
+    const adoptedVersions = Object.keys(ADOPTED_BY_VERSION).sort();
+    const adoptedRunByVersion = {};
+    for (const v of adoptedVersions) {
+      const ts = ADOPTED_BY_VERSION[v];
+      adoptedRunByVersion[v] = RUNS.find(r => r.timestamp === ts) || null;
+    }
+    const adoptedRates = adoptedVersions.map(v => {
+      const r = adoptedRunByVersion[v];
+      return r && typeof r.overall_rate === 'number' ? r.overall_rate : null;
+    });
+
+    let adherenceChart = null;
+    function buildAdherenceChart(showNonAdopted) {
+      const datasets = [{
+        label: 'adopted run',
+        data: adoptedRates,
+        backgroundColor: '#28a745',
+        borderRadius: 2,
+      }];
+
+      if (showNonAdopted) {
+        const others = adoptedVersions.map(v => {
+          const adopted = ADOPTED_BY_VERSION[v];
+          const rs = RUNS
+            .filter(r => r.plugin_version === v && r.timestamp !== adopted && typeof r.overall_rate === 'number')
+            .map(r => ({ x: v, y: r.overall_rate, ts: r.timestamp, full_five: r.full_five, has_aborted: r.has_aborted }));
+          return rs;
+        }).flat();
+        datasets.push({
+          type: 'scatter',
+          label: 'non-adopted runs',
+          data: others,
+          backgroundColor: 'rgba(40,167,69,0.25)',
+          borderColor: 'rgba(40,167,69,0.5)',
+          pointRadius: 5,
+        });
+      }
+
+      const ctx = document.getElementById('chart-adherence').getContext('2d');
+      if (adherenceChart) adherenceChart.destroy();
+      adherenceChart = new Chart(ctx, {
+        type: 'bar',
+        data: { labels: adoptedVersions, datasets },
+        options: {
+          responsive: true,
+          maintainAspectRatio: false,
+          scales: {
+            y: { min: 0, max: 100, title: { display: true, text: 'overall_rate (%)' } },
+            x: { title: { display: true, text: 'plugin_version' } },
+          },
+          plugins: {
+            tooltip: {
+              callbacks: {
+                afterBody: (items) => {
+                  const v = items[0].label;
+                  const note = VERSION_NOTES[v];
+                  const adoptedTs = ADOPTED_BY_VERSION[v];
+                  const lines = [];
+                  if (adoptedTs) lines.push(`adopted run: ${adoptedTs}`);
+                  if (note) lines.push(note);
+                  return lines;
+                },
+              },
+            },
+            legend: { display: showNonAdopted },
+          },
+        },
+        plugins: [{
+          id: 'rate-labels',
+          afterDatasetsDraw(chart) {
+            const { ctx } = chart;
+            const meta = chart.getDatasetMeta(0);
+            ctx.save();
+            ctx.fillStyle = '#222';
+            ctx.font = '600 12px sans-serif';
+            ctx.textAlign = 'center';
+            for (let i = 0; i < meta.data.length; i++) {
+              const bar = meta.data[i];
+              const v = adoptedRates[i];
+              if (v === null || v === undefined) continue;
+              ctx.fillText(`${v}%`, bar.x, bar.y - 4);
+            }
+            ctx.restore();
+          },
+        }],
+      });
+    }
+
+    if (adoptedVersions.length === 0) {
+      document.getElementById('chart-adherence').style.display = 'none';
+      document.getElementById('adherence-fallback').style.display = 'block';
+    } else {
+      buildAdherenceChart(false);
+      document.getElementById('show-non-adopted').addEventListener('change', (e) => {
+        buildAdherenceChart(e.target.checked);
+      });
+    }
+
+    // --- Block 2: Heatmap (HTML table) ---
+    const heatTable = document.getElementById('heatmap-table');
+    const colorFor = (v) => {
+      if (v === null || v === undefined) return null;
+      const c = Math.max(0, Math.min(1, v));
+      // 0 -> red(#d73a49), 0.5 -> yellow(#fbbc04), 1 -> green(#28a745)
+      let r, g, b;
+      if (c < 0.5) {
+        const t = c / 0.5;
+        r = Math.round(0xd7 + (0xfb - 0xd7) * t);
+        g = Math.round(0x3a + (0xbc - 0x3a) * t);
+        b = Math.round(0x49 + (0x04 - 0x49) * t);
+      } else {
+        const t = (c - 0.5) / 0.5;
+        r = Math.round(0xfb + (0x28 - 0xfb) * t);
+        g = Math.round(0xbc + (0xa7 - 0xbc) * t);
+        b = Math.round(0x04 + (0x45 - 0x04) * t);
+      }
+      const luma = (0.299 * r + 0.587 * g + 0.114 * b) / 255;
+      const fg = luma > 0.55 ? '#222' : '#fff';
+      return `background: rgb(${r},${g},${b}); color: ${fg};`;
+    };
+
+    {
+      const versions = adoptedVersions;
+      let html = '<thead><tr><th>scenario \\ version</th>';
+      for (const v of versions) html += `<th>v${escapeHtml(v)}</th>`;
+      html += '</tr></thead><tbody>';
+      for (const s of SCENARIOS) {
+        html += `<tr><th>${escapeHtml(s)}</th>`;
+        for (const v of versions) {
+          const run = adoptedRunByVersion[v];
+          const rate = run ? run.per_scenario_rates[s] : null;
+          if (rate === null || rate === undefined) {
+            html += `<td class="missing" title="${escapeHtml(s)} @ v${escapeHtml(v)}: missing">—</td>`;
+          } else {
+            const pct = Math.round(rate * 1000) / 10;
+            const style = colorFor(rate);
+            html += `<td style="${style}" title="${escapeHtml(s)} @ v${escapeHtml(v)}: ${pct}% (run ${escapeHtml(run.timestamp)})">${pct}%</td>`;
+          }
+        }
+        html += '</tr>';
+      }
+      html += '</tbody>';
+      heatTable.innerHTML = html;
+      if (versions.length === 0) {
+        heatTable.innerHTML = '<tbody><tr><td class="nodata">No adopted runs to plot.</td></tr></tbody>';
+      }
+    }
+
+    // --- Block 3: Efficiency Trend ---
+    document.getElementById('efficiency-note').textContent = DATA.efficiency_note || '';
+    const effRuns = RUNS
+      .filter(r => r.efficiency.avg_tool_uses !== null
+                || r.efficiency.avg_input_tokens !== null
+                || r.efficiency.avg_output_tokens !== null
+                || r.efficiency.avg_wall_ms !== null)
+      .slice()
+      .sort((a, b) => a.timestamp.localeCompare(b.timestamp));
+
+    if (effRuns.length === 0) {
+      document.getElementById('efficiency-nodata').style.display = 'block';
+      for (const id of ['chart-eff-tools', 'chart-eff-in', 'chart-eff-out', 'chart-eff-wall']) {
+        const c = document.getElementById(id);
+        if (c) c.style.display = 'none';
+      }
+    } else {
+      const labels = effRuns.map(r => `v${r.plugin_version}@${r.timestamp.slice(0, 8)}`);
+      const colors = ['#1f77b4', '#ff7f0e', '#2ca02c', '#d62728'];
+      const charts = [
+        { id: 'chart-eff-tools', key: 'avg_tool_uses', title: 'avg_tool_uses', color: colors[0] },
+        { id: 'chart-eff-in', key: 'avg_input_tokens', title: 'avg_input_tokens', color: colors[1] },
+        { id: 'chart-eff-out', key: 'avg_output_tokens', title: 'avg_output_tokens', color: colors[2] },
+        { id: 'chart-eff-wall', key: 'avg_wall_ms', title: 'avg_wall_ms', color: colors[3] },
+      ];
+      const fewPoints = effRuns.length < 2;
+      for (const c of charts) {
+        const data = effRuns.map(r => r.efficiency[c.key]);
+        new Chart(document.getElementById(c.id).getContext('2d'), {
+          type: 'line',
+          data: {
+            labels,
+            datasets: [{
+              label: c.title,
+              data,
+              borderColor: c.color,
+              backgroundColor: c.color,
+              spanGaps: true,
+              pointRadius: fewPoints ? 6 : 3,
+              tension: 0.2,
+            }],
+          },
+          options: {
+            responsive: true,
+            maintainAspectRatio: false,
+            plugins: {
+              title: { display: true, text: c.title + (fewPoints ? ' (1-2 data points - reference only)' : '') },
+              legend: { display: false },
+            },
+            scales: {
+              y: { beginAtZero: true },
+            },
+          },
+        });
+      }
+    }
+
+    // --- Block 4: Run Index Table ---
+    const tbody = document.querySelector('#runs-table tbody');
+    function cvClass(cv) {
+      const m = /^(\d+)\.(\d+)\.(\d+)/.exec(cv);
+      return m ? `cv-${m[1]}-${m[2]}-${m[3]}` : '';
+    }
+    function fmtNum(v) {
+      return (v === null || v === undefined) ? '–' : v;
+    }
+    function fmtRates(rates) {
+      return SCENARIOS
+        .map(s => `${s}:${rates[s] === null || rates[s] === undefined ? 'N/A' : rates[s]}`)
+        .join(';');
+    }
+    function renderRows(rows) {
+      tbody.innerHTML = rows.map(r => {
+        const cls = `${r.adopted ? 'adopted' : ''} ${cvClass(r.claude_version)}`.trim();
+        const link = `${encodeURI(r.timestamp)}/summary.md`;
+        return `<tr class="${escapeHtml(cls)}">
+          <td><a class="run-link" href="${escapeHtml(link)}">${escapeHtml(r.timestamp)}</a></td>
+          <td>${escapeHtml(r.model)}</td>
+          <td>${escapeHtml(r.plugin_version)}</td>
+          <td>${escapeHtml(r.claude_version)}</td>
+          <td><code>${escapeHtml(r.git_sha)}</code></td>
+          <td>${r.overall_rate === null ? 'N/A' : r.overall_rate + '%'}</td>
+          <td class="row-summary">${escapeHtml(fmtRates(r.per_scenario_rates))}</td>
+          <td>${fmtNum(r.efficiency.avg_tool_uses)}</td>
+          <td>${fmtNum(r.efficiency.avg_input_tokens)}</td>
+          <td>${fmtNum(r.efficiency.avg_output_tokens)}</td>
+          <td>${fmtNum(r.efficiency.avg_wall_ms)}</td>
+        </tr>`;
+      }).join('');
+    }
+    let sortKey = 'timestamp';
+    let sortAsc = false;
+    function sortRows() {
+      const rows = RUNS.slice().sort((a, b) => {
+        const va = sortKey === 'overall_rate' ? (a.overall_rate ?? -1)
+                 : sortKey === 'avg_tool_uses' ? (a.efficiency.avg_tool_uses ?? -1)
+                 : sortKey === 'avg_input_tokens' ? (a.efficiency.avg_input_tokens ?? -1)
+                 : sortKey === 'avg_output_tokens' ? (a.efficiency.avg_output_tokens ?? -1)
+                 : sortKey === 'avg_wall_ms' ? (a.efficiency.avg_wall_ms ?? -1)
+                 : a[sortKey];
+        const vb = sortKey === 'overall_rate' ? (b.overall_rate ?? -1)
+                 : sortKey === 'avg_tool_uses' ? (b.efficiency.avg_tool_uses ?? -1)
+                 : sortKey === 'avg_input_tokens' ? (b.efficiency.avg_input_tokens ?? -1)
+                 : sortKey === 'avg_output_tokens' ? (b.efficiency.avg_output_tokens ?? -1)
+                 : sortKey === 'avg_wall_ms' ? (b.efficiency.avg_wall_ms ?? -1)
+                 : b[sortKey];
+        if (va < vb) return sortAsc ? -1 : 1;
+        if (va > vb) return sortAsc ? 1 : -1;
+        return 0;
+      });
+      renderRows(rows);
+      document.querySelectorAll('#runs-table th[data-sort]').forEach(th => {
+        th.classList.remove('sort-asc', 'sort-desc');
+        if (th.dataset.sort === sortKey) th.classList.add(sortAsc ? 'sort-asc' : 'sort-desc');
+      });
+    }
+    document.querySelectorAll('#runs-table th[data-sort]').forEach(th => {
+      th.addEventListener('click', () => {
+        const k = th.dataset.sort;
+        if (k === sortKey) sortAsc = !sortAsc; else { sortKey = k; sortAsc = false; }
+        sortRows();
+      });
+    });
+    sortRows();
+  })();
+  </script>
+  <!--
+    Generated by scripts/build-eval-report.sh.
+    Re-run via:    bash scripts/build-eval-report.sh
+    Auto-run from: evals/run.sh (last line)
+  -->
+</body>
+</html>

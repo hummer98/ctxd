@@ -260,4 +260,8 @@ python3 "$REPO_ROOT/evals/summarize.py" \
   --index-md       "$REPO_ROOT/evals/results/index.md" \
   --index-csv      "$REPO_ROOT/evals/results/index.csv"
 
+# T031: index.csv 更新後に HTML レポートを再生成。失敗しても run 全体は成功扱い。
+bash "$REPO_ROOT/scripts/build-eval-report.sh" \
+  || echo "[run.sh] WARN: build-eval-report.sh failed (report.html not regenerated)" >&2
+
 echo "done: $RESULTS_DIR/summary.md"
