@@ -1,6 +1,6 @@
 # cmux-team cohort study — ctxd plugin field measurement PLAN
 
-本計画は A001 (`.team/artifacts/A001-ctxd-effect-measurement-plan.md`) Stage 2 を cmux-team の実フィールドで運用するための準備文書である。介入 (`@hummer98/ctxd-claude-plugin` の install) の前後を retroactive baseline + 時系列 evaluation cohort として比較する。
+本計画は A001 (`.team/artifacts/A001-ctxd-effect-measurement-plan.md`) Stage 2 を cmux-team の実フィールドで運用するための準備文書である。介入 (`ctxd@hummer98-ctxd` plugin の install) の前後を retroactive baseline + 時系列 evaluation cohort として比較する。
 
 各セクションの番号は固定で、後続タスク (T026〜T029) およびレポート (README 追記) はこの番号を参照する。
 
@@ -33,20 +33,19 @@ Stage 1 (A001) の合成 eval (`evals/run.sh`) は SKILL.md frontmatter の trig
 
 ---
 
-## 3. 対象 project (10 個の固定リスト)
+## 3. 対象 project (7 個の固定リスト)
 
-選定基準: **直近 30 日で `hook_signals > 100` を持つ project** (= 計測に足る活動量がある). 本計画開始時点 (2026-05) で以下 10 個に固定する。途中追加・削除はしない (cohort identity を変えないため):
+選定基準は当初 **直近 30 日で `hook_signals > 100` を持つ project** で 10 個を選定したが、T026 (retroactive baseline 生成) で **3 project (`KDG-lab` / `AIview` / `nanobanana-adc`) は `events.jsonl` を持たない** ことが判明した。`events.jsonl` は task lifecycle event の唯一のソースであり、これが無いと `cmux-team metrics snapshot` が `Error: events.jsonl not found` で fail し snapshot が生成できない。よって本計画では `events.jsonl` 有り の **7 project** に縮小して cohort identity を確定する。途中追加・削除はしない:
 
 - `cmux-team`
 - `Dear`
 - `bun-mot`
 - `slack-chan`
-- `KDG-lab`
 - `ctxd`
 - `mado`
 - `slaido`
-- `AIview`
-- `nanobanana-adc`
+
+(対象外: `KDG-lab` / `AIview` / `nanobanana-adc` — events.jsonl 不在)
 
 各 project 内の `.team/metrics/snapshots/YYYY-MM-DD.json` を真のソースとし、本 ctxd repo には集計値しか持ち込まない (§ 9)。
 
@@ -67,13 +66,16 @@ cohort 境界の唯一の真のソース (SSOT) は本ディレクトリの [`in
 
 ## 5. 介入の実体
 
-介入は次の 1 コマンドのみ:
+介入は次の 2 コマンド:
 
 ```bash
-claude plugins:install @hummer98/ctxd-claude-plugin
+claude plugin marketplace add hummer98/ctxd     # 一度だけ (marketplace 登録)
+claude plugin install ctxd@hummer98-ctxd
 ```
 
 claude plugin は **user スコープ install** であり、project ごとに on/off できない。本 PLAN.md commit 直後 (本タスク T025 完了直後) にユーザーが手動で実行する。実行と同時に `intervention-log.md` に install タイムスタンプを 1 行追記する責務をユーザーが負う。
+
+> 注: 当初 README は `claude plugins:install @hummer98/ctxd-claude-plugin` (npm scope syntax) を install 経路として提示していたが、claude plugin は npm 経由ではなく **marketplace (GitHub repo の `.claude-plugin/marketplace.json`) 経由** で install する設計のため、上記 marketplace syntax が正解。npm に publish された `@hummer98/ctxd-claude-plugin@0.2.0` package は claude plugin install には使われない (副次的な存在)。詳細は commit 970b358。
 
 撤退・再導入が発生した場合は同様に `uninstall` / `reinstall` 行を append-only で追記する。
 
@@ -81,17 +83,19 @@ claude plugin は **user スコープ install** であり、project ごとに on
 
 ## 6. 「ctxd 有効」marker の取得方法
 
-trace DB だけでは plugin install 状態を判定できない (cmux-team の `SESSION_STARTED` hook payload は loaded plugin リストを含まない)。よって以下 3 層で運用する:
+trace DB だけでは plugin install 状態を判定できなかったが、cmux-team #49 (T410, v4.24.0+) で `SESSION_STARTED` payload に `loadedPlugins` が同梱されるようになった。本計画では以下 3 層で運用する (L3 が稼働開始):
 
 ### L1: 手動 install timestamp (cohort 境界の SSOT、必須)
 
 `intervention-log.md` に append-only で記録する。format:
 
 ```
-2026-05-XX HH:MM:SSZ  install    @hummer98/ctxd-claude-plugin@<version>
+2026-05-XX HH:MM:SSZ  install    ctxd@hummer98-ctxd@<version>
 2026-05-YY HH:MM:SSZ  uninstall  (撤退判定発動 / ユーザー判断)
-2026-05-ZZ HH:MM:SSZ  reinstall  @hummer98/ctxd-claude-plugin@<version>
+2026-05-ZZ HH:MM:SSZ  reinstall  ctxd@hummer98-ctxd@<version>
 ```
+
+plugin 識別子は **marketplace syntax** (`<plugin-name>@<source_id>`) を使う。これは cmux-team の SESSION_STARTED `loadedPlugins` 配列で使われる format と完全一致させ、SQL trace を容易にするため (cmux-team spec docs/11-metrics.md §3.5.2)。npm package 名 (`@hummer98/ctxd-claude-plugin`) は別物。
 
 - すべて UTC ISO-8601。
 - install 直後にユーザーが 1 行追記する規律を約束する。
@@ -121,9 +125,29 @@ GROUP BY s2t.task_id;
 
 evaluation 期間の task を `ctxd_calls > 0` (実使用) と `ctxd_calls = 0` (未使用) に strata 分割し、effect の濃淡を見る。baseline 期間の task は SQL 結果に含まれないはずなので、intervention-log.md と一致しない場合は install 日の記録漏れ検出に使える (sanity check)。
 
-### L3: SessionStart 時の loaded plugin 情報 (将来、未実装)
+### L3: SessionStart 時の loaded plugin 情報 (cmux-team v4.24.0+ で稼働開始)
 
-cmux-team の `SessionStart` hook payload に loaded plugin リストを含めれば、session 単位で確実に install 状態が取れる。**本ラウンドの scope 外**。T025 完了後、cmux-team へ feature request issue を出す候補とする (任意作業)。
+cmux-team #49 (T410) が merged + release され v4.24.0 以降の daemon は `SESSION_STARTED` payload に `loadedPlugins` (string array) を同梱するようになった。session 単位で確実に install 状態を判定できる。
+
+cohort filter SQL idiom (cmux-team spec docs/11-metrics.md §3.5.2):
+
+```sql
+-- ctxd plugin が loaded だった session を抽出
+SELECT session_id
+FROM hook_signals
+WHERE type = 'SESSION_STARTED'
+  AND JSON_TYPE(payload_json, '$.loadedPlugins') = 'array'
+  AND EXISTS (
+    SELECT 1 FROM JSON_EACH(payload_json, '$.loadedPlugins')
+    WHERE value = 'ctxd@hummer98-ctxd'
+  );
+```
+
+L1 (intervention-log.md) と L3 (loadedPlugins) の **整合性チェック** を T031 開始前に必ず行う:
+
+- L1 の install 日時 ± 24h を境に L3 の出現有無が反転していること
+- L1 が `install` を記録した直後の SESSION_STARTED 行に `ctxd@hummer98-ctxd` が含まれること
+- ズレがあれば intervention-log.md の追記漏れ or daemon 古いバージョンが原因なので解消する
 
 ---
 
@@ -150,7 +174,7 @@ cmux-team spec § 4.4 を継承する。具体的には副作用系 (`tokens.inp
 
 撤退手順:
 
-1. ユーザーが `claude plugins:uninstall @hummer98/ctxd-claude-plugin` を実行する。
+1. ユーザーが `claude plugin uninstall ctxd@hummer98-ctxd` を実行する。
 2. `intervention-log.md` に `uninstall` エントリを append する (理由欄に「撤退判定発動」と書く)。
 3. README の研究セクション (§ 11) に撤退理由と判定根拠 (どの token 系列が +X% かつ p=Y か) を明記する。
 
@@ -178,8 +202,8 @@ raw を共有する必要が出た場合は集計レイヤを増やす (例: pro
 
 - **time confounder**: 学習効果・季節性・ユーザー作業内容の時期変動を分離不能。「ctxd 導入後に効率化した」が「同時期にユーザー側のスキル向上で効率化した」と区別できない。
 - **selection bias**: ctxd を実際に使った task は使わなかった task と既に違う性質を持つ (難しい task でだけ ctxd を呼ぶ等)。L2 strata 分析で緩和を試みるが完全解消不可。
-- **subject-between (project 間) 差を pooled 集計で平均化することの粗さ**: 10 project の特性差 (規模・言語・チーム慣習) を flat に平均すると、特定の project だけで効いている効果が薄まる/誇張される可能性がある。
-- **検出力の限界**: n=10 project / 4-12 week では **medium effect size 以上** しか有意化しない可能性がある。small effect は検出できないことを明記しておく。
+- **subject-between (project 間) 差を pooled 集計で平均化することの粗さ**: 7 project の特性差 (規模・言語・チーム慣習) を flat に平均すると、特定の project だけで効いている効果が薄まる/誇張される可能性がある。
+- **検出力の限界**: n=7 project / 4-12 week では **medium effect size 以上** しか有意化しない可能性がある。small effect は検出できないことを明記しておく。
 - **L1 marker の運用依存性**: `intervention-log.md` 追記漏れがあると全分析が破綻する。ユーザーが install 直後に必ず追記する規律に依存しており、これが本計測の最大の脆弱点。
 
 ---
@@ -200,9 +224,11 @@ raw を共有する必要が出た場合は集計レイヤを増やす (例: pro
 
 ## 12. 後続タスクの index
 
+T027〜T030 は本ラウンドの release インフラ整備で消費した (T027: plugin npm publish 経路 / T028: Go CLI goreleaser + homebrew tap / T029: GitHub Actions release workflow + CHANGELOG / T030: `/release` slash command + CLAUDE.md release ops)。よって cohort study の +4w/+8w/+12w 評価ラウンドは **T031〜T033** として起票する。
+
 | Task ID | 内容 | 依存 |
 | --- | --- | --- |
-| T026 | retroactive baseline 生成 (10 project × 過去 N 日の snapshot 一括生成) + ユーザーによる ctxd install 実施 + `intervention-log.md` 記録 | T025 完了 |
-| T027 | install +4w で `cmux-team metrics compare` を全 project 横断実行 + preliminary を README に追記 | T026 完了 + install から 4 週経過 |
-| T028 | install +8w で本報告 (`compare` 再実行 + README 更新 + 撤退判定チェック) | T027 完了 + install から 8 週経過 |
-| T029 | install +12w で最終確定 (`compare` 再実行 + README 最終更新 + Stage 3 への申し送り) | T028 完了 + install から 12 週経過 |
+| T026 | retroactive baseline 生成 (7 project × 過去 28 日の snapshot 一括生成、events.jsonl 有り project のみ) + ユーザーによる ctxd install 実施 + `intervention-log.md` 記録 | T025 完了 |
+| T031 | install +4w で `cmux-team metrics compare` を 7 project 横断実行 + preliminary を README に追記 | T026 完了 + install から 4 週経過 (= 2026-05-30) |
+| T032 | install +8w で本報告 (`compare` 再実行 + README 更新 + 撤退判定チェック) | T031 完了 + install から 8 週経過 (= 2026-06-27) |
+| T033 | install +12w で最終確定 (`compare` 再実行 + README 最終更新 + Stage 3 への申し送り) | T032 完了 + install から 12 週経過 (= 2026-07-25) |
