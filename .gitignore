@@ -1,7 +1,9 @@
 .envrc
 .team/
 .worktrees/
-.claude/
+
+# Claude Code project config: commit commands/, ignore local settings
+.claude/settings.local.json
 
 # Build artifacts
 /ctxd
@@ -27,3 +29,5 @@ __pycache__/
 # npm
 node_modules/
 *.tgz
+# bootstrap 時の `npm install` 産物 (本 repo は npm 依存ゼロのため不要)
+package-lock.json

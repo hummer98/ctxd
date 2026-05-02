@@ -234,8 +234,7 @@ Installs both the `ctxd` binary and the Skill that teaches Claude to use it.
 **Standalone CLI:**
 
 ```sh
-npm install -g @hummer98/ctxd
-# or
+# npm install -g @hummer98/ctxd  # (coming soon — Go binary npm wrapper not yet published)
 brew install hummer98/tap/ctxd
 ```
 

@@ -223,8 +223,7 @@ claude plugins:install @hummer98/ctxd-claude-plugin
 **スタンドアロン CLI:**
 
 ```sh
-npm install -g @hummer98/ctxd
-# もしくは
+# npm install -g @hummer98/ctxd  # (近日公開予定 — Go バイナリの npm wrapper は未公開)
 brew install hummer98/tap/ctxd
 ```
 

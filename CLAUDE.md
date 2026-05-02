@@ -22,6 +22,7 @@
 - **`.claude-plugin/plugin.json` の `description` の整合性を確認する**: SKILL.md frontmatter の `description` (長文 / when-to-use の本文) と `.claude-plugin/plugin.json` の `description` (短文要約、`claude plugin validate` の上限内) は独立に管理する。SKILL.md の意図が大きく変わったら plugin.json 側の要約も合わせて更新する。Q1 reviewer note 参照。
 - **派生先は手動同期しない**: `evals/.eval-plugin/.claude-plugin/plugin.json` の `version` は `evals/run.sh` の起動時に真のソース (`.claude-plugin/plugin.json`) から動的に再生成される。手動同期は不要。
 - **README の統計テーブルを更新する**: 新しい version で本走 (5 scenarios 揃いで harness 完走した run) を取ったら、`README.md` の `### Adherence over plugin versions` と `README.ja.md` の `### バージョン別 SKILL 遵守率` に 1 行追記する。採用 run の選別基準は「5 scenarios 揃い / harness-aborted でない / 同一 version 内で最新」。自動生成スクリプトは現時点で未整備なので手動運用。
+- **eval を取り直してから release を切る**: SKILL.md / plugin.json `description` を変更した release では、`bash evals/run.sh` で新 plugin version の baseline を取り直してから `/release <bump>` を実行する。先に release を切ると `evals/results/index.{md,csv}` 上で adherence 数値と release 番号の対応が後付けになり、trace が複雑化する。Release 手順全体は本ファイルの `## Release 手順` 参照。
 
 ## モデル ID の記録 (T022)
 
@@ -35,14 +36,71 @@
 - `EVAL_MODEL=claude-sonnet-4-5 bash evals/run.sh` のように他モデルを試すときも、index は新 run として 1 行追加されるだけで、過去 run と混ざらない (識別は `(timestamp, plugin_version, model, git_sha)` の組)。
 - `README.md` / `README.ja.md` の統計テーブルにも `model` 列があるので、新 run を追記するときは plugin version と並べて model を必ず埋めること。
 
+## Release 手順
+
+### バージョン同期ポリシー
+
+ctxd は以下を **同一 semver で同期** する:
+
+- `.claude-plugin/plugin.json` の `version` (= 真のソース)
+- `package.json` の `version` (`scripts/sync-package-version.sh` で同期、CI でも verify)
+- `cmd/ctxd/main.go` の version (build 時に goreleaser が `-ldflags` で埋める)
+- git tag (`v<X.Y.Z>`)
+
+### release を切る (手元の操作)
+
+ctxd repo の Claude Code session で `/release <patch|minor|major>` を実行する。
+
+このコマンドは:
+
+1. 現 version の sync 状態を確認 (`scripts/sync-package-version.sh --check`)
+2. SKILL.md / plugin.json description を変更している場合は eval 取り直し済みかを user に確認 (詳細は `## SKILL バージョンアップ運用 > バンプ時の付随作業` 参照)
+3. `.claude-plugin/plugin.json` の version を bump し `package.json` を同期
+4. `CHANGELOG.md` に新 entry を追加 / 日付プレースホルダを確定
+5. `chore: release v<X.Y.Z>` で commit
+6. `v<X.Y.Z>` の tag を打つ (push は user 確認後)
+
+定義は `.claude/commands/release.md`。手元から push した tag を契機に CI が release を実行する。
+
+### CI が release を実行 (自動)
+
+tag push を契機に `.github/workflows/release.yml` が以下 3 job を並走させる:
+
+- **publish-plugin**: npm OIDC trusted publishing で `@hummer98/ctxd-claude-plugin` を publish
+  - `NPM_TOKEN` は使わない (毎回ブラウザログイン不要)
+  - 事前に npmjs.com UI で trusted publisher (`hummer98/ctxd` repo + `release.yml` workflow + `release` environment) を登録しておく
+  - tag version と plugin.json/package.json version の一致を job 内で verify
+- **publish-cli**: goreleaser で multi-arch binary (linux/darwin/windows × amd64/arm64) を GitHub Release に upload + `hummer98/homebrew-tap` の Formula を bump
+- **github-release**: `CHANGELOG.md` から `## [<version>]` section を抽出し GitHub Release notes として post
+
+### CI が失敗したら
+
+**手動 publish の fallback は用意しない**。CI を直して fix-forward の patch を切る方針:
+
+- workflow file の bug → 修正 commit + 新 tag を打つ (古い tag を消さず、新しい patch tag で進む)
+- secrets 不備 (`HOMEBREW_TAP_TOKEN` 等) → secrets を直して同 tag を re-run
+- npm trusted publisher 未登録 → npmjs.com UI で登録して同 tag を re-run
+
+`NPM_TOKEN` を発行して手動 publish に逃げない (運用乱れの元)。
+
+### scope 外の配布チャネル
+
+- `npm install -g @hummer98/ctxd` (Go binary を npm 経由で配る wrapper) は未実装。README は "(coming soon)" 表記。後続で需要を見て検討。
+
+### bootstrap 期固有の手順 (履歴的記録)
+
+初回 `v0.2.0` publish のみ user が手動で local publish を行った。trusted publisher 登録手順含めて `## plugin の npm publish 手順` セクションに保存してある (今後の通常運用は本セクション = `/release` 経由)。
+
 ## 真のソースの位置
 
 | 対象 | 真のソース |
 | --- | --- |
 | プラグイン version / name / description | `.claude-plugin/plugin.json` |
 | npm package version (`package.json`) | `.claude-plugin/plugin.json` (`scripts/sync-package-version.sh` で同期) |
+| npm package (`@hummer98/ctxd-claude-plugin`) | `package.json` (version は plugin.json と sync スクリプトで同期、CI でも verify) |
 | Skill 本文 / when-to-use | `skills/ctxd/SKILL.md` |
-| ctxd CLI version | `cmd/ctxd/main.go` の `var version` (build 時 `-ldflags -X main.version=...` で上書き)。tag は `.claude-plugin/plugin.json` の `version` と同期する (1 tag = 1 plugin version = 1 CLI version)。release ops の詳細は T030 で別途記録。 |
+| ctxd CLI version | `cmd/ctxd/main.go` の `var version` (build 時 `-ldflags -X main.version=...` で上書き)。tag は `.claude-plugin/plugin.json` の `version` と同期する (1 tag = 1 plugin version = 1 CLI version)。詳細は本ファイル '## Release 手順' を参照。 |
+| GitHub Release / homebrew tap (`hummer98/homebrew-tap`) | `git tag v<X.Y.Z>` push を契機に `.github/workflows/release.yml` が自動生成 (goreleaser + OIDC publish) |
 
 ## plugin の npm publish 手順
 
@@ -79,13 +137,9 @@ T029 で `.github/workflows/release.yml` を整備する前に、user は npmjs.
 
 ### 通常運用 (T029 完了後)
 
-通常の version bump リリースは以下:
+通常の version bump リリースは ctxd repo の Claude Code session で `/release <patch|minor|major>` を実行する。手順は本ファイルの `## Release 手順` を参照。
 
-1. `.claude-plugin/plugin.json` の `version` を semver で bump (CLAUDE.md 既存ルール)
-2. `bash scripts/sync-package-version.sh` で `package.json` を同期
-3. commit / push / `git tag v<X.Y.Z>` / `git push --tags`
-4. tag push で T029 の CI workflow (`release.yml`) が `npm publish` を OIDC で実行
-5. `npm view @hummer98/ctxd-claude-plugin version` で新 version を確認
+本セクション以下 (bootstrap 手順 / trusted publisher 設定 / 手動 publish の dry-run) は **緊急時の fallback と歴史的記録** として残す。CI 障害時も手動 publish には逃げず CI を直す方針 (`## Release 手順 > CI が失敗したら` 参照)。
 
 publish 後 24 時間以内のみ `npm unpublish @hummer98/ctxd-claude-plugin@<X.Y.Z>` で取り消し可。それ以降は `npm deprecate` で警告を付けるのみ。dry-run で必ず内容を確認すること。
 
