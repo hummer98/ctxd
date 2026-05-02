@@ -5,11 +5,14 @@
 #
 # Usage:
 #   bash scripts/build-baseline-report.sh --phase before \
+#        [--source-name <name>] \
 #        [--since YYYY-MM-DD] [--until YYYY-MM-DD] [--db <path>]
 #
 # Output:
-#   evals/baseline/data-<phase>-<YYYYMMDD>.json
-#   evals/baseline/cmux-team-<phase>-<YYYYMMDD>.html
+#   evals/baseline/data-<source>-<phase>-<YYYYMMDD>.json
+#   evals/baseline/<source>-<phase>-<YYYYMMDD>.html
+#
+# --source-name は kebab-case ([a-z0-9][a-z0-9-]*); default は "ctxd".
 #
 # Exit codes (plan §2.0):
 #   0 success
@@ -31,9 +34,10 @@ SINCE=""
 UNTIL=""
 DB="$REPO_ROOT/.team/traces/traces.db"
 OUT_DIR="$REPO_ROOT/evals/baseline"
+SOURCE_NAME="ctxd"
 
 usage() {
-  sed -n '2,18p' "$0" | sed 's/^# \{0,1\}//'
+  sed -n '2,20p' "$0" | sed 's/^# \{0,1\}//'
 }
 
 while [[ $# -gt 0 ]]; do
@@ -42,6 +46,7 @@ while [[ $# -gt 0 ]]; do
     --since) SINCE="${2:-}"; shift 2 ;;
     --until) UNTIL="${2:-}"; shift 2 ;;
     --db) DB="${2:-}"; shift 2 ;;
+    --source-name) SOURCE_NAME="${2:-}"; shift 2 ;;
     -h|--help) usage; exit 0 ;;
     *) echo "unknown arg: $1" >&2; usage >&2; exit 1 ;;
   esac
@@ -59,6 +64,10 @@ if [[ -n "$SINCE" && ! "$SINCE" =~ $date_re ]]; then
 fi
 if [[ -n "$UNTIL" && ! "$UNTIL" =~ $date_re ]]; then
   echo "--until must be YYYY-MM-DD (got: $UNTIL)" >&2
+  exit 1
+fi
+if ! [[ "$SOURCE_NAME" =~ ^[a-z0-9][a-z0-9-]*$ ]]; then
+  echo "--source-name must be kebab-case [a-z0-9][a-z0-9-]* (got: $SOURCE_NAME)" >&2
   exit 1
 fi
 
@@ -86,14 +95,15 @@ else
   fi
 fi
 
-DATA_JSON="$OUT_DIR/data-${PHASE}-${WINDOW_END_DATE}.json"
-HTML_OUT="$OUT_DIR/cmux-team-${PHASE}-${WINDOW_END_DATE}.html"
+DATA_JSON="$OUT_DIR/data-${SOURCE_NAME}-${PHASE}-${WINDOW_END_DATE}.json"
+HTML_OUT="$OUT_DIR/${SOURCE_NAME}-${PHASE}-${WINDOW_END_DATE}.html"
 
 # 1. extract: sqlite3 → 中間 JSON
 python3 "$SCRIPT_DIR/lib/extract_baseline.py" \
   --db "$DB" \
   --phase "$PHASE" \
   --git-sha "$GIT_SHA" \
+  --source-name "$SOURCE_NAME" \
   ${SINCE:+--since "$SINCE"} \
   ${UNTIL:+--until "$UNTIL"} \
   --out "$DATA_JSON"

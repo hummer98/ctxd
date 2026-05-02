@@ -222,11 +222,15 @@ GROUP BY model, role;
 
 ```
 evals/baseline/
-├── data-before-20260502.json     # 抽出した中間データ (再描画可能)
-├── cmux-team-before-20260502.html # HTML レポート
-├── data-after-<YYYYMMDD>.json    # 後で生成
-└── cmux-team-after-<YYYYMMDD>.html
+├── data-ctxd-before-20260502.json       # ctxd repo 中間データ (再描画可能)
+├── ctxd-before-20260502.html            # ctxd repo HTML レポート
+├── data-cmux-team-before-20260502.json  # cmux-team repo 中間データ (T034 追加)
+├── cmux-team-before-20260502.html       # cmux-team repo HTML レポート
+├── data-<source>-after-<YYYYMMDD>.json  # 後で生成
+└── <source>-after-<YYYYMMDD>.html
 ```
+
+ファイル名は `<source>-<phase>-<YYYYMMDD>.html` / `data-<source>-<phase>-<YYYYMMDD>.json` の形式 (T034)。`<source>` は `--source-name` で渡される repo 識別子で、kebab-case (`[a-z0-9][a-z0-9-]*`) を強制する。default は `ctxd`。これにより 1 つの `evals/baseline/` ディレクトリに ctxd / cmux-team / 他 repo の baseline を並列で蓄積できる。
 
 中間 JSON を残す理由: schema 変更や HTML テンプレ改修があっても、過去 baseline を再描画できるようにするため (eval 側の `evals/results/<timestamp>/summary.md` と同じ思想)。
 
@@ -269,7 +273,9 @@ After を取った後に、Before と After を並べる比較 HTML を生成す
 ```bash
 #!/usr/bin/env bash
 # Usage:
-#   bash scripts/build-baseline-report.sh --phase before [--since YYYY-MM-DD] [--until YYYY-MM-DD]
+#   bash scripts/build-baseline-report.sh --phase before \
+#        [--source-name <name>] \
+#        [--since YYYY-MM-DD] [--until YYYY-MM-DD] [--db <path>]
 set -euo pipefail
 
 REPO_ROOT="$(git rev-parse --show-toplevel)"
@@ -281,27 +287,32 @@ mkdir -p "$OUT_DIR"
 PHASE="${PHASE:-before}"
 SINCE=""
 UNTIL=""
+SOURCE_NAME="ctxd"   # default。kebab-case [a-z0-9][a-z0-9-]* 強制 (T034)
 while [[ $# -gt 0 ]]; do
   case "$1" in
     --phase) PHASE="$2"; shift 2 ;;
     --since) SINCE="$2"; shift 2 ;;
     --until) UNTIL="$2"; shift 2 ;;
+    --source-name) SOURCE_NAME="$2"; shift 2 ;;
     *) echo "unknown arg: $1" >&2; exit 1 ;;
   esac
 done
 
 [[ "$PHASE" =~ ^(before|after)$ ]] || { echo "phase must be before|after" >&2; exit 1; }
+[[ "$SOURCE_NAME" =~ ^[a-z0-9][a-z0-9-]*$ ]] \
+  || { echo "--source-name must be kebab-case" >&2; exit 1; }
 
 # DATE は出力ファイル名に使う実行日。実装側 (extract_baseline.py) では集計 window の "until" は
 # --until 引数または DB の MAX(timestamp) 由来で決まり、ここの実行日とは独立。
 # 2 回実行で同 hash を期待する場合は SOURCE_DATE_EPOCH を export する (§4.2 補足参照)。
 DATE="$(date +%Y%m%d)"
-DATA_JSON="$OUT_DIR/data-${PHASE}-${DATE}.json"
-HTML_OUT="$OUT_DIR/cmux-team-${PHASE}-${DATE}.html"
+DATA_JSON="$OUT_DIR/data-${SOURCE_NAME}-${PHASE}-${DATE}.json"
+HTML_OUT="$OUT_DIR/${SOURCE_NAME}-${PHASE}-${DATE}.html"
 
 # 1. SQL 実行 → data JSON 生成 (python3 で sqlite3 + 集計)
 python3 "$REPO_ROOT/scripts/lib/extract_baseline.py" \
   --db "$DB" \
+  --source-name "$SOURCE_NAME" \
   ${SINCE:+--since "$SINCE"} \
   ${UNTIL:+--until "$UNTIL"} \
   --phase "$PHASE" \
@@ -318,11 +329,14 @@ echo "wrote: $DATA_JSON"
 
 抽出ロジック (`extract_baseline.py`) と描画ロジック (`render_baseline.py`) は分離する。schema 変更時は extract 側だけ直し、HTML テンプレ変更時は render 側だけ直せるようにする。
 
+`--source-name` (T034) は出力ファイル名 / 中間 JSON の `source_name` フィールド / HTML Header の `source` 行の 3 箇所に同じ値が入る。default は `ctxd` で、複数 repo の baseline を 1 つの `evals/baseline/` 配下に並列で蓄積するための識別子。
+
 ### 4.2 中間 JSON schema
 
 ```jsonc
 {
   "schema_version": 1,
+  "source_name": "ctxd",
   "phase": "before",
   "generated_at": "2026-05-02T15:00:00Z",
   "git_sha": "691eca5",
@@ -363,10 +377,11 @@ echo "wrote: $DATA_JSON"
 - `totals.sessions_by_role.<role>` は `per_session_rate.<key>.<role>` の denominator として使う。schema_version=1 では `agent` / `conductor` / `master` の 3 role を必ずキーに含め、観測 0 の role は `0` を入れる (キーごと省略しない)
 - `sessions_by_role.<role> == 0` のとき、当該 role の `per_session_rate.<key>.<role>` は `null` を返す (divide-by-zero フォールバック)。0 ではなく `null` にすることで「観測なし」と「ヒット 0 件」を区別する
 - `generated_at` は `SOURCE_DATE_EPOCH` 環境変数 (UNIX epoch 秒) が設定されている場合のみ deterministic (reproducible-builds.org 規約)。未設定だと `datetime.now(UTC)` が入るため、2 回実行で hash 一致を期待する場合は caller が `SOURCE_DATE_EPOCH` を export する必要がある。CI / 比較ページ生成側で固定したい場合に opt-in で使う
+- `source_name` は T034 で optional 追加 (schema_version は 1 据え置き; キー追加は後方互換)。renderer 側 (`render_baseline.py`) は `source_name` を必須キーとして扱うので、古い JSON (T032/T033 で生成、`source_name` 欠落) を新 renderer に通すと exit 5 (schema mismatch) になる。古い JSON は同 window で再生成して上書きする運用
 
 ### 4.3 完了条件
 
-- [ ] `scripts/build-baseline-report.sh --phase before` 実行で `evals/baseline/data-before-<date>.json` と `cmux-team-before-<date>.html` が生成される
+- [ ] `scripts/build-baseline-report.sh --phase before --source-name <name>` 実行で `evals/baseline/data-<source>-<phase>-<YYYYMMDD>.json` と `evals/baseline/<source>-<phase>-<YYYYMMDD>.html` が生成される (default `--source-name` は `ctxd`、命名規則は §3.1 参照)
 - [ ] HTML をブラウザで開いて 3 tier すべて表示される
 - [ ] 中間 JSON を `git diff` で確認して、想定の集計値と一致する (手動 SQL で cross-check)
 - [ ] 期間引数 `--since` / `--until` が動作する

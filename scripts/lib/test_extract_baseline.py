@@ -141,10 +141,14 @@ def insert_api_usage(conn: sqlite3.Connection, *, ts: str, role: str, task_id: s
 
 def run_extract(*, db: Path, out: Path, phase: str = "before",
                 since: str | None = None, until: str | None = None,
-                git_sha: str = "deadbee") -> subprocess.CompletedProcess[str]:
+                git_sha: str = "deadbee",
+                source_name: str | None = "ctxd",
+                ) -> subprocess.CompletedProcess[str]:
     cmd = [sys.executable, str(SCRIPT),
            "--db", str(db), "--phase", phase,
            "--git-sha", git_sha, "--out", str(out)]
+    if source_name is not None:
+        cmd += ["--source-name", source_name]
     if since:
         cmd += ["--since", since]
     if until:
@@ -311,6 +315,52 @@ class TestPerSessionRateNull(unittest.TestCase):
             self.assertAlmostEqual(
                 data["per_session_rate"]["tier1.cd"]["conductor"], 1 / 2)
             self.assertIsNone(data["per_session_rate"]["tier1.cd"]["master"])
+
+
+class TestSourceName(unittest.TestCase):
+    """T034 — --source-name field is recorded in JSON envelope."""
+
+    def _make_minimal_db(self, db: Path) -> None:
+        conn = make_db(db)
+        ts = "2026-04-26T00:00:00.000Z"
+        insert_bash(conn, ts=ts, role="agent", session_id="s1",
+                    command="cd /tmp")
+        conn.commit()
+        conn.close()
+
+    def test_source_name_in_json(self) -> None:
+        with tempfile.TemporaryDirectory() as td:
+            db = Path(td) / "fix.db"
+            self._make_minimal_db(db)
+            out = Path(td) / "out.json"
+            res = run_extract(db=db, out=out,
+                              since="2026-04-25", until="2026-04-30",
+                              source_name="foobar")
+            self.assertEqual(res.returncode, 0, msg=res.stderr)
+            data = json.loads(out.read_text())
+            self.assertEqual(data["source_name"], "foobar")
+
+    def test_source_name_default_ctxd(self) -> None:
+        with tempfile.TemporaryDirectory() as td:
+            db = Path(td) / "fix.db"
+            self._make_minimal_db(db)
+            out = Path(td) / "out.json"
+            res = run_extract(db=db, out=out,
+                              since="2026-04-25", until="2026-04-30")
+            self.assertEqual(res.returncode, 0, msg=res.stderr)
+            data = json.loads(out.read_text())
+            self.assertEqual(data["source_name"], "ctxd")
+
+    def test_source_name_missing_argparse_error(self) -> None:
+        with tempfile.TemporaryDirectory() as td:
+            db = Path(td) / "fix.db"
+            self._make_minimal_db(db)
+            out = Path(td) / "out.json"
+            res = run_extract(db=db, out=out,
+                              since="2026-04-25", until="2026-04-30",
+                              source_name=None)
+            self.assertNotEqual(res.returncode, 0, msg=res.stderr)
+            self.assertFalse(out.exists())
 
 
 class TestSchemaMismatch(unittest.TestCase):

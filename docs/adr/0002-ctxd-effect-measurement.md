@@ -89,7 +89,7 @@ ctxd 投入で全体が遅く / 重くならないかを確認する保険指標
 
 ### Open questions
 
-1. **母数拡大**: cmux-team を使っている他リポジトリ (cmux-team 本体、slaido 等) の `.team/traces/traces.db` をマージするか? マージすると母数が増えるが、対象 repo 列の追加と DB ファイル収集の運用負荷が増える。**初版では ctxd repo のみで開始**。マージは 0003 ADR 以降で検討
+1. **母数拡大**: cmux-team を使っている他リポジトリ (cmux-team 本体、slaido 等) の `.team/traces/traces.db` をマージするか? マージすると母数が増えるが、対象 repo 列の追加と DB ファイル収集の運用負荷が増える。**初版では ctxd repo のみで開始**。マージは 0003 ADR 以降で検討。**(2026-05-03 update / T034)**: `--source-name` 引数を追加し、ctxd repo + cmux-team repo の Before baseline を `evals/baseline/` に並列で蓄積できるようにした。複数 source を 1 レポートに統合する multi-source aggregation はまだ別タスク (0003 ADR 候補)
 2. **After 計測のタイミング**: ctxd 投入後すぐ計測すると "新ツール慣れ" のノイズが入る。投入から **2 週間以上**経過、かつ Bash tool 呼び出しが Before と同オーダー以上になってから取る、を運用ルールにする
 3. **匿名化**: `tool_input.command` には ctxd repo 内の作業内容が生で入る。HTML レポートを公開 commit するなら top-N 例の表示でセンシティブ情報が出ないか確認が必要。**初版ではドリルダウン UI を出さず集計値のみ表示**にして、公開許容範囲を最小化
 4. **claude code バージョン分離**: api_usage の model 列で bucket するだけで足りるか、claude code CLI バージョン (`claude --version`) も記録列に含めるか。spec の中で要検討

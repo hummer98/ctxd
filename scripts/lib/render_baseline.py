@@ -43,7 +43,7 @@ def load_data(path: Path) -> dict[str, Any]:
         raise ValueError(
             f"expected schema_version={SCHEMA_VERSION} "
             f"got {data.get('schema_version')!r}")
-    for key in ("phase", "generated_at", "git_sha", "window",
+    for key in ("source_name", "phase", "generated_at", "git_sha", "window",
                 "totals", "tier1", "tier2", "tier3", "per_session_rate"):
         if key not in data:
             raise KeyError(key)
@@ -100,10 +100,12 @@ def render_header(data: dict[str, Any]) -> str:
 <header class="report-header">
   <div class="phase-badge phase-{esc(data['phase'])}">{esc(phase)}</div>
   <div class="header-meta">
+    <div class="row"><span class="label">source</span>
+      <span>{esc(data['source_name'])}</span></div>
     <div class="row"><span class="label">window</span>
       <span>{esc(win['since'])} &le; t &lt; {esc(win['until'])}</span></div>
     <div class="row"><span class="label">repo</span>
-      <span>ctxd repo (.team/traces/traces.db)</span></div>
+      <span>{esc(data['source_name'])} repo (.team/traces/traces.db)</span></div>
     <div class="row"><span class="label">model bucket</span>
       <span>{esc(model_str)}</span></div>
   </div>
@@ -335,7 +337,7 @@ def assemble(data: dict[str, Any]) -> str:
 <html lang="ja">
 <head>
   <meta charset="utf-8">
-  <title>ctxd baseline report — {esc(data['phase'])}</title>
+  <title>ctxd baseline report — {esc(data['source_name'])} {esc(data['phase'])}</title>
   <style>{CSS}</style>
 </head>
 <body>

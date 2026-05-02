@@ -2,7 +2,7 @@
 <html lang="ja">
 <head>
   <meta charset="utf-8">
-  <title>ctxd baseline report — cmux-team before</title>
+  <title>ctxd baseline report — ctxd before</title>
   <style>
 :root { color-scheme: light; }
 * { box-sizing: border-box; }
@@ -63,19 +63,19 @@ table.tier-table .empty { color: #888; font-style: italic; text-align: center; }
   <div class="phase-badge phase-before">BEFORE</div>
   <div class="header-meta">
     <div class="row"><span class="label">source</span>
-      <span>cmux-team</span></div>
+      <span>ctxd</span></div>
     <div class="row"><span class="label">window</span>
-      <span>2026-04-15 &le; t &lt; 2026-05-03</span></div>
+      <span>2026-05-02 &le; t &lt; 2026-05-03</span></div>
     <div class="row"><span class="label">repo</span>
-      <span>cmux-team repo (.team/traces/traces.db)</span></div>
+      <span>ctxd repo (.team/traces/traces.db)</span></div>
     <div class="row"><span class="label">model bucket</span>
       <span>claude-haiku-4-5-20251001, claude-opus-4-7</span></div>
   </div>
   <div class="totals-grid">
-    <div><span class="big">74</span><span>sessions</span></div>
+    <div><span class="big">18</span><span>sessions</span></div>
     <div><span class="big">0</span><span>tasks</span></div>
-    <div><span class="big">3438</span><span>tool_calls</span></div>
-    <div><span class="big">1822</span><span>bash_calls</span></div>
+    <div><span class="big">571</span><span>tool_calls</span></div>
+    <div><span class="big">297</span><span>bash_calls</span></div>
   </div>
 </header>
 
@@ -101,36 +101,36 @@ table.tier-table .empty { color: #888; font-style: italic; text-align: center; }
       
 <tr>
   <th class="cat">cd (incl. compound)</th>
-  <td class="num total">209</td>
+  <td class="num total">26</td>
   <td class="bar-cell"><div class="bar-track"><div class="bar-fill" style="width: 100%; background: #28a745;"></div></div></td>
-  <td class="num agent"><strong>113</strong></td>
-  <td class="num">96</td>
+  <td class="num agent"><strong>4</strong></td>
+  <td class="num">22</td>
   <td class="num">0</td>
-  <td class="rate agent"><strong>1.95 / session</strong></td>
-  <td class="rate">6.86 / session</td>
+  <td class="rate agent"><strong>0.31 / session</strong></td>
+  <td class="rate">5.50 / session</td>
   <td class="rate">0.00 / session</td>
 </tr>
 
 <tr>
   <th class="cat">git checkout / git switch</th>
-  <td class="num total">0</td>
-  <td class="bar-cell"><div class="bar-track"><div class="bar-fill" style="width: 0%; background: #28a745;"></div></div></td>
-  <td class="num agent"><strong>0</strong></td>
+  <td class="num total">1</td>
+  <td class="bar-cell"><div class="bar-track"><div class="bar-fill" style="width: 4%; background: #28a745;"></div></div></td>
+  <td class="num agent"><strong>1</strong></td>
   <td class="num">0</td>
   <td class="num">0</td>
-  <td class="rate agent"><strong>0.00 / session</strong></td>
+  <td class="rate agent"><strong>0.08 / session</strong></td>
   <td class="rate">0.00 / session</td>
   <td class="rate">0.00 / session</td>
 </tr>
 
 <tr>
   <th class="cat">export / unset</th>
-  <td class="num total">0</td>
-  <td class="bar-cell"><div class="bar-track"><div class="bar-fill" style="width: 0%; background: #28a745;"></div></div></td>
-  <td class="num agent"><strong>0</strong></td>
+  <td class="num total">2</td>
+  <td class="bar-cell"><div class="bar-track"><div class="bar-fill" style="width: 8%; background: #28a745;"></div></div></td>
+  <td class="num agent"><strong>2</strong></td>
   <td class="num">0</td>
   <td class="num">0</td>
-  <td class="rate agent"><strong>0.00 / session</strong></td>
+  <td class="rate agent"><strong>0.15 / session</strong></td>
   <td class="rate">0.00 / session</td>
   <td class="rate">0.00 / session</td>
 </tr>
@@ -161,37 +161,37 @@ table.tier-table .empty { color: #888; font-style: italic; text-align: center; }
       
 <tr>
   <th class="cat">pwd (standalone)</th>
-  <td class="num total">5</td>
-  <td class="bar-cell"><div class="bar-track"><div class="bar-fill" style="width: 26%; background: #28a745;"></div></div></td>
-  <td class="num agent"><strong>3</strong></td>
-  <td class="num">2</td>
+  <td class="num total">0</td>
+  <td class="bar-cell"><div class="bar-track"><div class="bar-fill" style="width: 0%; background: #28a745;"></div></div></td>
+  <td class="num agent"><strong>0</strong></td>
   <td class="num">0</td>
-  <td class="rate agent"><strong>0.05 / session</strong></td>
-  <td class="rate">0.14 / session</td>
+  <td class="num">0</td>
+  <td class="rate agent"><strong>0.00 / session</strong></td>
+  <td class="rate">0.00 / session</td>
   <td class="rate">0.00 / session</td>
 </tr>
 
 <tr>
   <th class="cat">git status / branch --show-current / rev-parse --abbrev-ref</th>
-  <td class="num total">19</td>
+  <td class="num total">7</td>
   <td class="bar-cell"><div class="bar-track"><div class="bar-fill" style="width: 100%; background: #28a745;"></div></div></td>
-  <td class="num agent"><strong>16</strong></td>
-  <td class="num">3</td>
-  <td class="num">0</td>
-  <td class="rate agent"><strong>0.28 / session</strong></td>
-  <td class="rate">0.21 / session</td>
-  <td class="rate">0.00 / session</td>
+  <td class="num agent"><strong>3</strong></td>
+  <td class="num">2</td>
+  <td class="num">2</td>
+  <td class="rate agent"><strong>0.23 / session</strong></td>
+  <td class="rate">0.50 / session</td>
+  <td class="rate">2.00 / session</td>
 </tr>
 
 <tr>
   <th class="cat">printenv / echo $... / env | ...</th>
-  <td class="num total">2</td>
-  <td class="bar-cell"><div class="bar-track"><div class="bar-fill" style="width: 11%; background: #28a745;"></div></div></td>
+  <td class="num total">0</td>
+  <td class="bar-cell"><div class="bar-track"><div class="bar-fill" style="width: 0%; background: #28a745;"></div></div></td>
   <td class="num agent"><strong>0</strong></td>
-  <td class="num">2</td>
+  <td class="num">0</td>
   <td class="num">0</td>
   <td class="rate agent"><strong>0.00 / session</strong></td>
-  <td class="rate">0.14 / session</td>
+  <td class="rate">0.00 / session</td>
   <td class="rate">0.00 / session</td>
 </tr>
 
@@ -220,21 +220,21 @@ table.tier-table .empty { color: #888; font-style: italic; text-align: center; }
       
 <tr>
   <th>agent</th>
-  <td class="num">13</td>
-  <td class="num">14.4</td>
-  <td class="num">534.7</td>
-  <td class="num">2510.2</td>
-  <td class="num">109919.0</td>
-  <td class="num">8305.7</td>
+  <td class="num">9</td>
+  <td class="num">60.3</td>
+  <td class="num">752.5</td>
+  <td class="num">3746.5</td>
+  <td class="num">81628.1</td>
+  <td class="num">11529.0</td>
 </tr>
 <tr>
   <th>conductor</th>
-  <td class="num">14</td>
-  <td class="num">21.9</td>
-  <td class="num">631.4</td>
-  <td class="num">2077.1</td>
-  <td class="num">115756.7</td>
-  <td class="num">10045.9</td>
+  <td class="num">4</td>
+  <td class="num">1.0</td>
+  <td class="num">740.5</td>
+  <td class="num">1707.5</td>
+  <td class="num">96447.2</td>
+  <td class="num">12185.4</td>
 </tr>
     </tbody>
   </table>
@@ -255,26 +255,26 @@ table.tier-table .empty { color: #888; font-style: italic; text-align: center; }
 <tr>
   <th>claude-haiku-4-5-20251001</th>
   <td>agent</td>
-  <td class="num">13</td>
-  <td class="num">205.3</td>
-  <td class="num">10.8</td>
-  <td class="num">1158.9</td>
+  <td class="num">8</td>
+  <td class="num">204.7</td>
+  <td class="num">11.1</td>
+  <td class="num">1040.6</td>
 </tr>
 <tr>
   <th>claude-opus-4-7</th>
   <td>agent</td>
-  <td class="num">13</td>
-  <td class="num">4.2</td>
-  <td class="num">562.5</td>
-  <td class="num">8685.5</td>
+  <td class="num">9</td>
+  <td class="num">47.4</td>
+  <td class="num">818.8</td>
+  <td class="num">12466.1</td>
 </tr>
 <tr>
   <th>claude-opus-4-7</th>
   <td>conductor</td>
-  <td class="num">14</td>
-  <td class="num">21.9</td>
-  <td class="num">631.4</td>
-  <td class="num">10045.9</td>
+  <td class="num">4</td>
+  <td class="num">1.0</td>
+  <td class="num">740.5</td>
+  <td class="num">12185.4</td>
 </tr>
     </tbody>
   </table>
@@ -283,7 +283,7 @@ table.tier-table .empty { color: #888; font-style: italic; text-align: center; }
 
 <footer class="report-footer">
   <span>schema_version=1</span>
-  <span>generated_at=2026-05-02T16:22:40Z</span>
+  <span>generated_at=2025-05-02T00:00:00Z</span>
   <span>git_sha=e3db2ba</span>
   <span>phase=before</span>
 </footer>

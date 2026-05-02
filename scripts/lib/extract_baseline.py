@@ -38,6 +38,8 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
     p.add_argument("--until", default=None,
                    help="YYYY-MM-DD; SQL uses next-day exclusive bound")
     p.add_argument("--git-sha", required=True)
+    p.add_argument("--source-name", required=True,
+                   help="repo identifier (e.g. ctxd, cmux-team)")
     p.add_argument("--out", required=True)
     return p.parse_args(argv)
 
@@ -300,6 +302,7 @@ def build_envelope(args: argparse.Namespace, conn: sqlite3.Connection,
     per_session_rate = compute_per_session_rate(tier_counts, sessions_by_role)
     return {
         "schema_version": SCHEMA_VERSION,
+        "source_name": args.source_name,
         "phase": args.phase,
         "generated_at": utc_now_iso(),
         "git_sha": args.git_sha,
