@@ -41,7 +41,7 @@
 | --- | --- |
 | プラグイン version / name / description | `.claude-plugin/plugin.json` |
 | Skill 本文 / when-to-use | `skills/ctxd/SKILL.md` |
-| ctxd CLI version | `cmd/ctxd/main.go` (現状 `0.0.0-dev` 固定、本タスク範囲外) |
+| ctxd CLI version | `cmd/ctxd/main.go` の `var version` (build 時 `-ldflags -X main.version=...` で上書き)。tag は `.claude-plugin/plugin.json` の `version` と同期する (1 tag = 1 plugin version = 1 CLI version)。release ops の詳細は T030 で別途記録。 |
 
 ## 計測結果の commit 方針
 

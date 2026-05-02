@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 )
 
@@ -192,6 +193,26 @@ func TestRun_Chdir_ExpectPass_HumanMode(t *testing.T) {
 	}
 	if m["ok"] != true {
 		t.Errorf("ok: got %v, want true", m["ok"])
+	}
+}
+
+// TestRun_VersionTemplate: --version 出力が version / commit / built の 3 要素を含むことを確認 (T028)。
+// goreleaser の -ldflags が空 (= デフォルト値) でも、template 経路自体が動いていることを保証する。
+// commit / date は ldflags 経路が壊れたときに regression を即検出するためのガード。
+func TestRun_VersionTemplate(t *testing.T) {
+	exit, stdout, _ := runOnce(t, []string{"--version"})
+	if exit != 0 {
+		t.Errorf("exit: got %d, want 0; stdout=%s", exit, stdout)
+	}
+	// デフォルトでは version=0.0.0-dev / commit=unknown / date=unknown が埋まる想定。
+	if !strings.Contains(stdout, "0.0.0-dev") {
+		t.Errorf("--version stdout should contain version 0.0.0-dev; got %q", stdout)
+	}
+	if !strings.Contains(stdout, "commit ") {
+		t.Errorf("--version stdout should contain 'commit '; got %q", stdout)
+	}
+	if !strings.Contains(stdout, "built ") {
+		t.Errorf("--version stdout should contain 'built '; got %q", stdout)
 	}
 }
 

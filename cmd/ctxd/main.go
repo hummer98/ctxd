@@ -28,8 +28,14 @@ import (
 	gitswitch "github.com/hummer98/ctxd/internal/runner/git_switch"
 )
 
-// version は build 時に -ldflags で上書きする想定。MVP の既定値はプレースホルダ。
-var version = "0.0.0-dev"
+// version / commit / date は build 時に -ldflags で上書きする想定。
+// goreleaser から `-X main.version=... -X main.commit=... -X main.date=...` で埋める (T028)。
+// 既定値はローカル `go build` 用のプレースホルダ。
+var (
+	version = "0.0.0-dev"
+	commit  = "unknown"
+	date    = "unknown"
+)
 
 func main() {
 	os.Exit(run(context.Background(), os.Args[1:], os.Stdout, os.Stderr))
@@ -86,6 +92,10 @@ func newRootCmd(registry *runner.Registry, stdout io.Writer, exitCode *int) *cob
 			return cmd.Help()
 		},
 	}
+	// `--version` 出力に commit / built 日付を含める (T028)。
+	// cobra の SetVersionTemplate は cobra.Command の field しか参照できないので、
+	// commit / date は fmt.Sprintf で事前に組み立てた文字列に埋め込む。
+	rootCmd.SetVersionTemplate(fmt.Sprintf("ctxd version %s (commit %s, built %s)\n", version, commit, date))
 
 	// persistent flag は全サブコマンド共通。
 	rootCmd.PersistentFlags().BoolVar(&human, "human", false, "human-readable output (pretty-printed JSON)")

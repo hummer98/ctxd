@@ -1,0 +1,54 @@
+version: 2
+project_name: ctxd
+
+before:
+  hooks:
+    - go mod tidy
+
+builds:
+  - id: ctxd
+    main: ./cmd/ctxd
+    binary: ctxd
+    env:
+      - CGO_ENABLED=0
+    goos: [linux, darwin, windows]
+    goarch: [amd64, arm64]
+    ldflags:
+      - -s -w
+      - -X main.version={{.Version}}
+      - -X main.commit={{.Commit}}
+      - -X main.date={{.Date}}
+
+archives:
+  - id: ctxd
+    formats: [tar.gz]
+    format_overrides:
+      - goos: windows
+        formats: [zip]
+    name_template: >-
+      ctxd_{{.Version}}_{{.Os}}_{{.Arch}}
+
+checksum:
+  name_template: 'checksums.txt'
+
+snapshot:
+  version_template: "{{ incpatch .Version }}-next"
+
+brews:
+  - name: ctxd
+    repository:
+      owner: hummer98
+      name: homebrew-tap
+      branch: main
+      token: "{{ .Env.HOMEBREW_TAP_TOKEN }}"
+    homepage: https://github.com/hummer98/ctxd
+    description: Declarative CLI commands for shell state mutations
+    license: Apache-2.0
+    test: |
+      system "#{bin}/ctxd --version"
+
+release:
+  github:
+    owner: hummer98
+    name: ctxd
+  prerelease: auto
