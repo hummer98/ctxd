@@ -1,0 +1,21 @@
+{
+  "name": "hummer98-ctxd",
+  "owner": {
+    "name": "hummer98"
+  },
+  "plugins": [
+    {
+      "name": "ctxd",
+      "source": "./",
+      "description": "Declarative companion to shell state mutations (cd, export, git checkout/switch). Emits structured JSON describing cwd, env, and git state.",
+      "version": "0.2.0",
+      "author": {
+        "name": "Yuji Yamamoto",
+        "email": "yuji.yamamoto@tayorie.jp"
+      },
+      "repository": "https://github.com/hummer98/ctxd",
+      "license": "Apache-2.0",
+      "keywords": ["claude", "claude-code", "claude-plugin", "skill", "shell", "cwd", "git", "context"]
+    }
+  ]
+}

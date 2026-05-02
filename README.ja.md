@@ -212,19 +212,22 @@ ctxd env-set FOO=bar BAZ=qux
 
 > 開発中です。バイナリリリースは近日公開予定です。
 
-**Claude Code プラグイン** (Claude Code ユーザー向け推奨):
+Claude Code プラグイン (Skill) と `ctxd` Go バイナリは別々に配布されます。両方インストールしてください。
+
+**Claude Code プラグイン** (Claude に `ctxd` の使い方を教える Skill):
 
 ```sh
-claude plugins:install @hummer98/ctxd-claude-plugin
+claude plugin marketplace add hummer98/ctxd
+claude plugin install ctxd@hummer98-ctxd
 ```
 
-`ctxd` バイナリと、Claude にその使い方を教える Skill の両方をインストールします。
-
-**スタンドアロン CLI:**
+**`ctxd` Go バイナリ** (Claude が実際に呼び出す実行ファイル):
 
 ```sh
-# npm install -g @hummer98/ctxd  # (近日公開予定 — Go バイナリの npm wrapper は未公開)
-brew install hummer98/tap/ctxd
+brew install hummer98/tap/ctxd                          # macOS / Linux (Homebrew)
+# または
+go install github.com/hummer98/ctxd/cmd/ctxd@latest     # Go がインストール済の任意の環境
+# または https://github.com/hummer98/ctxd/releases/latest からアーカイブを取得
 ```
 
 ---

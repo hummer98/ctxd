@@ -223,19 +223,22 @@ the child process saw.
 
 > Work in progress. Binary releases coming soon.
 
-**Claude Code Plugin** (recommended for Claude Code users):
+The Claude Code plugin (Skill) and the `ctxd` Go binary are distributed separately. Install both for the full experience.
+
+**Claude Code plugin** (the Skill that teaches Claude to use `ctxd`):
 
 ```sh
-claude plugins:install @hummer98/ctxd-claude-plugin
+claude plugin marketplace add hummer98/ctxd
+claude plugin install ctxd@hummer98-ctxd
 ```
 
-Installs both the `ctxd` binary and the Skill that teaches Claude to use it.
-
-**Standalone CLI:**
+**`ctxd` Go binary** (the executable Claude actually invokes):
 
 ```sh
-# npm install -g @hummer98/ctxd  # (coming soon — Go binary npm wrapper not yet published)
-brew install hummer98/tap/ctxd
+brew install hummer98/tap/ctxd                          # macOS / Linux (Homebrew)
+# or
+go install github.com/hummer98/ctxd/cmd/ctxd@latest     # any Go-installed env
+# or grab a tarball from https://github.com/hummer98/ctxd/releases/latest
 ```
 
 ---
