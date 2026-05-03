@@ -363,6 +363,54 @@ class TestSourceName(unittest.TestCase):
             self.assertFalse(out.exists())
 
 
+class TestSinceDefault(unittest.TestCase):
+    """spec §1.2 — `--since` 未指定時は DB MIN(timestamp) が since になる"""
+
+    def test_since_defaults_to_db_min(self) -> None:
+        with tempfile.TemporaryDirectory() as td:
+            db = Path(td) / "fix.db"
+            conn = make_db(db)
+            insert_bash(conn, ts="2026-04-25T10:00:00.000Z",
+                        role="agent", session_id="s1", command="cd /a")
+            insert_bash(conn, ts="2026-04-28T10:00:00.000Z",
+                        role="agent", session_id="s2", command="cd /b")
+            insert_bash(conn, ts="2026-05-02T10:00:00.000Z",
+                        role="agent", session_id="s3", command="cd /c")
+            conn.commit()
+            conn.close()
+            out = Path(td) / "out.json"
+            res = run_extract(db=db, out=out)
+            self.assertEqual(res.returncode, 0, msg=res.stderr)
+            data = json.loads(out.read_text())
+            self.assertEqual(data["window"]["since"], "2026-04-25",
+                             msg="spec §1.2: --since default = DB MIN(timestamp)")
+            self.assertEqual(data["window"]["until"], "2026-05-03",
+                             msg="--until default = MAX(timestamp) + 1 day")
+            self.assertEqual(data["totals"]["tool_calls"], 3)
+            self.assertEqual(data["tier1"]["cd"]["total"], 3)
+
+    def test_since_default_with_until_specified(self) -> None:
+        """spec §1.2 — `--until` 指定 + `--since` 未指定で since は DB MIN"""
+        with tempfile.TemporaryDirectory() as td:
+            db = Path(td) / "fix.db"
+            conn = make_db(db)
+            insert_bash(conn, ts="2026-04-25T10:00:00.000Z",
+                        role="agent", session_id="s1", command="cd /a")
+            insert_bash(conn, ts="2026-04-28T10:00:00.000Z",
+                        role="agent", session_id="s2", command="cd /b")
+            insert_bash(conn, ts="2026-05-02T10:00:00.000Z",
+                        role="agent", session_id="s3", command="cd /c")
+            conn.commit()
+            conn.close()
+            out = Path(td) / "out.json"
+            res = run_extract(db=db, out=out, until="2026-04-30")
+            self.assertEqual(res.returncode, 0, msg=res.stderr)
+            data = json.loads(out.read_text())
+            self.assertEqual(data["window"]["since"], "2026-04-25")
+            self.assertEqual(data["window"]["until"], "2026-05-01")
+            self.assertEqual(data["totals"]["tool_calls"], 2)
+
+
 class TestSchemaMismatch(unittest.TestCase):
     """plan §2.0 / §9.1 — schema mismatch → exit 5"""
 

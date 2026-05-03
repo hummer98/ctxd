@@ -222,8 +222,8 @@ GROUP BY model, role;
 
 ```
 evals/baseline/
-├── data-ctxd-before-20260502.json       # ctxd repo 中間データ (再描画可能)
-├── ctxd-before-20260502.html            # ctxd repo HTML レポート
+├── data-ctxd-before-20260503.json       # ctxd repo 中間データ (再描画可能)
+├── ctxd-before-20260503.html            # ctxd repo HTML レポート
 ├── data-cmux-team-before-20260502.json  # cmux-team repo 中間データ (T034 追加)
 ├── cmux-team-before-20260502.html       # cmux-team repo HTML レポート
 ├── data-<source>-after-<YYYYMMDD>.json  # 後で生成
